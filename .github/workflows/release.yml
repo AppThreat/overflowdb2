@@ -1,8 +1,9 @@
-name: Release
+name: release
 on:
   push:
-    branches: [master, main]
-    tags: ["*"]
+    tags:
+      - 'v*'
+  workflow_dispatch:    # allow to manually trigger this workflow
 jobs:
   release:
     concurrency: release
@@ -26,6 +27,8 @@ jobs:
             ~/.coursier
           key: ${{ runner.os }}-sbt-${{ hashfiles('**/build.sbt') }}
       - run: sbt compile +test
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: sbt publish
         if: startsWith(github.ref, 'refs/tags/')
         env:

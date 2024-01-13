@@ -1,5 +1,11 @@
 name: PR
-on: pull_request
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feature/*
+  workflow_dispatch:
 jobs:
   pr:
     runs-on: ubuntu-latest
@@ -19,3 +25,5 @@ jobs:
             ~/.coursier
           key: ${{ runner.os }}-sbt-${{ hashfiles('**/build.sbt') }}
       - run: sbt +test
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
