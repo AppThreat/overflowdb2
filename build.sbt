@@ -1,6 +1,6 @@
 name := "overflowdb2"
 ThisBuild / organization := "io.appthreat"
-ThisBuild / version      := "0.0.3"
+ThisBuild / version      := "1.0.0"
 ThisBuild / scalaVersion := "3.3.1"
 publish / skip := true
 
