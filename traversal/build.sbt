@@ -1,4 +1,4 @@
-name := "overflowdb-traversal"
+name := "odb2-traversal"
 
 libraryDependencies ++= Seq(
   "org.reflections" % "reflections" % "0.10.2",

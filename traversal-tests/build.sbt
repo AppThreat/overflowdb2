@@ -1,4 +1,4 @@
-name := "overflowdb-traversal-tests"
+name := "odb2-traversal-tests"
 
 publish / skip := true
 

@@ -1,4 +1,4 @@
-name := "overflowdb-core"
+name := "odb2-core"
 
 libraryDependencies ++= Seq(
   "net.sf.trove4j" % "core" % "3.1.0",

@@ -1,4 +1,4 @@
-name := "overflowdb-core-tests"
+name := "odb2-core-tests"
 
 publish / skip := true
 

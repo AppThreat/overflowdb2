@@ -1,4 +1,4 @@
-name := "overflowdb-formats"
+name := "odb2-formats"
 
 libraryDependencies ++= Seq(
   "com.github.tototoshi" %% "scala-csv" % "1.3.10",
