@@ -154,7 +154,7 @@ class TraversalLogicExt[A](val iterator: Iterator[A]) extends AnyVal:
 
     /** perform side effect without changing the contents of the traversal */
     @Doc(info = "perform side effect without changing the contents of the traversal")
-    def sideEffect(fun: A => _): Traversal[A] =
+    def sideEffect(fun: A => ?): Traversal[A] =
         iterator match
             case pathAwareTraversal: PathAwareTraversal[A] => pathAwareTraversal._sideEffect(fun)
             case _ =>
@@ -320,7 +320,7 @@ class TraversalTrackingExt[A](val iterator: Iterator[A]) extends AnyVal:
                 pathAwareTraversal.wrapped.map { _._1 }
             case _ => iterator
 
-    def isPathTracking: Boolean = iterator.isInstanceOf[PathAwareTraversal[_]]
+    def isPathTracking: Boolean = iterator.isInstanceOf[PathAwareTraversal[?]]
 
     /** retrieve entire path that has been traversed thus far prerequisite: enablePathTracking has
       * been called previously
@@ -394,7 +394,7 @@ class TraversalRepeatExt[A](val trav: Iterator[A]) extends AnyVal:
       repeatTraversal: Traversal[A] => Traversal[B]
     )(implicit
       behaviourBuilder: RepeatBehaviour.Builder[B] => RepeatBehaviour.Builder[B] =
-          RepeatBehaviour.noop[B] _
+          RepeatBehaviour.noop[B]
     ): Traversal[B] =
         val behaviour = behaviourBuilder(new RepeatBehaviour.Builder[B]).build
         val _repeatTraversal =

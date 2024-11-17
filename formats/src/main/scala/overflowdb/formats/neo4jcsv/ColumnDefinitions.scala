@@ -139,13 +139,13 @@ class ColumnDefinitions(propertyNames: Iterable[String]):
 
         value match
             case _: Iterable[?] =>
-                deriveNeo4jTypeForArray(_.asInstanceOf[Iterable[_]])
+                deriveNeo4jTypeForArray(_.asInstanceOf[Iterable[?]])
             case _: IterableOnce[?] =>
-                deriveNeo4jTypeForArray(_.asInstanceOf[IterableOnce[_]].iterator.toSeq)
+                deriveNeo4jTypeForArray(_.asInstanceOf[IterableOnce[?]].iterator.toSeq)
             case _: java.lang.Iterable[?] =>
-                deriveNeo4jTypeForArray(_.asInstanceOf[java.lang.Iterable[_]].asScala)
+                deriveNeo4jTypeForArray(_.asInstanceOf[java.lang.Iterable[?]].asScala)
             case _: Array[?] =>
-                deriveNeo4jTypeForArray(x => ArraySeq.unsafeWrapArray(x.asInstanceOf[Array[_]]))
+                deriveNeo4jTypeForArray(x => ArraySeq.unsafeWrapArray(x.asInstanceOf[Array[?]]))
             case scalarValue =>
                 ScalarColumnDef(deriveNeo4jTypeForScalarValue(scalarValue.getClass))
     end deriveNeo4jType

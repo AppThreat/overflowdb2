@@ -1,7 +1,7 @@
 name := "overflowdb2"
 ThisBuild / organization := "io.appthreat"
-ThisBuild / version      := "1.0.0"
-ThisBuild / scalaVersion := "3.3.1"
+ThisBuild / version      := "1.0.1"
+ThisBuild / scalaVersion := "3.5.2"
 publish / skip := true
 
 lazy val core = project.in(file("core"))
@@ -12,7 +12,7 @@ lazy val coreTests = project.in(file("core-tests")).dependsOn(formats, testdomai
 lazy val traversalTests = project.in(file("traversal-tests")).dependsOn(formats)
 
 ThisBuild / libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "3.2.17" % Test
+  "org.scalatest" %% "scalatest" % "3.2.19" % Test
 )
 
 ThisBuild / scalacOptions ++= Seq(

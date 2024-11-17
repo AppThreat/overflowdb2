@@ -25,7 +25,7 @@ class GraphSugar(val graph: Graph) extends AnyVal:
     def `+`(label: String, id: Long, properties: Property[?]*): Node =
         graph.addNode(id, label, keyValuesAsSeq(properties)*)
 
-    private def keyValuesAsSeq(properties: Seq[Property[_]]): Seq[?] =
+    private def keyValuesAsSeq(properties: Seq[Property[?]]): Seq[?] =
         val builder = Seq.newBuilder[Any]
         builder.sizeHint(properties.size * 2)
         properties.foreach { kv =>
@@ -42,7 +42,7 @@ class NodeSugar(val node: Node) extends AnyVal:
     def ---(label: String, properties: Property[?]*): SemiEdge =
         new SemiEdge(node, label, properties)
 
-private[overflowdb] class SemiEdge(outNode: Node, label: String, properties: Seq[Property[_]]):
+private[overflowdb] class SemiEdge(outNode: Node, label: String, properties: Seq[Property[?]]):
     def -->(inNode: Node): Edge =
         val keyValues = new Array[Any](properties.size * 2)
         var i: Int    = 0

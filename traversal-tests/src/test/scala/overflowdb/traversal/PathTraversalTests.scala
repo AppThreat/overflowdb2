@@ -76,7 +76,7 @@ class PathTraversalTests extends AnyWordSpec with ExampleGraphSetup {
         verifyResults(center.start.enablePathTracking.both.both.dedup.path.toSetMutable)
         verifyResults(center.start.enablePathTracking.both.both.dedupBy(_.hashCode).path.toSetMutable)
 
-        def verifyResults(paths: collection.Set[Vector[_]]) = {
+        def verifyResults(paths: collection.Set[Vector[?]]) = {
           paths should contain(Vector(center, l1, l2))
           paths should contain(Vector(center, r1, r2))
           //        paths.should(contain(oneOf(Seq(center, l1, center), Seq(center, r1, center))))

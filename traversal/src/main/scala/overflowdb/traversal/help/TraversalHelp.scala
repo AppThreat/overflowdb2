@@ -27,10 +27,10 @@ class TraversalHelp(searchPackages: DocSearchPackages):
 
     def forElementSpecificSteps(elementClass: Class[?], verbose: Boolean): String =
         val isNode    = classOf[NodeDb].isAssignableFrom(elementClass)
-        val isNodeRef = classOf[NodeRef[_]].isAssignableFrom(elementClass)
+        val isNodeRef = classOf[NodeRef[?]].isAssignableFrom(elementClass)
 
         val stepDocs =
-            def parentTraitsRecursively(clazz: Class[?]): List[Class[_]] =
+            def parentTraitsRecursively(clazz: Class[?]): List[Class[?]] =
                 val parents = clazz.getInterfaces.to(List)
                 parents ++ parents.flatMap(parentTraitsRecursively)
 
@@ -79,7 +79,7 @@ class TraversalHelp(searchPackages: DocSearchPackages):
       * to then extract the \@Doc annotations for all steps, and group them by the elementType (e.g.
       * node.Method).
       */
-    lazy val stepDocsByElementType: Map[Class[_], List[StepDoc]] = {
+    lazy val stepDocsByElementType: Map[Class[?], List[StepDoc]] = {
         for
             packageName <- packageNamesToSearch
             traversal   <- findClassesAnnotatedWith(packageName, classOf[help.Traversal])
@@ -91,18 +91,18 @@ class TraversalHelp(searchPackages: DocSearchPackages):
     private def findClassesAnnotatedWith[Annotation <: JAnnotation](
       packageName: String,
       annotationClass: Class[Annotation]
-    ): Iterator[Class[_]] =
+    ): Iterator[Class[?]] =
         new Reflections(packageName).getTypesAnnotatedWith(annotationClass).asScala.iterator
 
     lazy val genericStepDocs: Iterable[StepDoc] =
-        findStepDocs(classOf[traversal.TraversalSugarExt[_]]) ++ findStepDocs(
-          classOf[traversal.TraversalFilterExt[_]]
-        ) ++ findStepDocs(classOf[traversal.TraversalLogicExt[_]]) ++ findStepDocs(
-          classOf[traversal.TraversalTrackingExt[_]]
-        ) ++ findStepDocs(classOf[traversal.TraversalRepeatExt[_]])
+        findStepDocs(classOf[traversal.TraversalSugarExt[?]]) ++ findStepDocs(
+          classOf[traversal.TraversalFilterExt[?]]
+        ) ++ findStepDocs(classOf[traversal.TraversalLogicExt[?]]) ++ findStepDocs(
+          classOf[traversal.TraversalTrackingExt[?]]
+        ) ++ findStepDocs(classOf[traversal.TraversalRepeatExt[?]])
 
     lazy val genericNodeStepDocs: Iterable[StepDoc] =
-        findStepDocs(classOf[NodeTraversal[_]]) ++ findStepDocs(classOf[ElementTraversal[_]])
+        findStepDocs(classOf[NodeTraversal[?]]) ++ findStepDocs(classOf[ElementTraversal[?]])
 
     protected def findStepDocs(traversal: Class[?]): Iterable[StepDoc] =
         DocFinder

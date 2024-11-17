@@ -44,27 +44,27 @@ class LowestCommonAncestorsTests extends AnyWordSpec {
 
   "empty set" in {
     val relevantNodes = Set.empty[Node]
-    LowestCommonAncestors(relevantNodes)(_.parents) shouldBe Set.empty
+    LowestCommonAncestors(relevantNodes)(using _.parents) shouldBe Set.empty
   }
 
   "one node" in {
     val relevantNodes = Set(D)
-    LowestCommonAncestors(relevantNodes)(_.parents) shouldBe relevantNodes
+    LowestCommonAncestors(relevantNodes)(using _.parents) shouldBe relevantNodes
   }
 
   "node E and H" in {
     val relevantNodes = Set(E, H)
-    LowestCommonAncestors(relevantNodes)(_.parents) shouldBe Set(B, C)
+    LowestCommonAncestors(relevantNodes)(using _.parents) shouldBe Set(B, C)
   }
 
   "node B,E,H" in {
     val relevantNodes = Set(B, E, H)
-    LowestCommonAncestors(relevantNodes)(_.parents) shouldBe Set(A)
+    LowestCommonAncestors(relevantNodes)(using _.parents) shouldBe Set(A)
   }
 
   "node A,B,E,H" in {
     val relevantNodes = Set(A, B, E, H)
-    LowestCommonAncestors(relevantNodes)(_.parents) shouldBe Set.empty
+    LowestCommonAncestors(relevantNodes)(using _.parents) shouldBe Set.empty
   }
 
   "cyclic dependencies" in {
