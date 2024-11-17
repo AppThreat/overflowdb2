@@ -1,7 +1,7 @@
 name := "odb2-formats"
 
 libraryDependencies ++= Seq(
-  "com.github.tototoshi" %% "scala-csv" % "1.3.10",
+  "com.github.tototoshi" %% "scala-csv" % "2.0.0",
   "org.scala-lang.modules" %% "scala-xml" % "2.3.0",
   "com.github.pathikrit" %% "better-files" % "3.9.2" % Test,
   "com.github.scopt" %% "scopt" % "4.1.0",
