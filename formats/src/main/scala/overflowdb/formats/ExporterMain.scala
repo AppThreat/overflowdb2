@@ -20,8 +20,8 @@ import scala.util.Using
 object ExporterMain:
 
     def apply(
-      nodeFactories: Seq[NodeFactory[_]],
-      edgeFactories: Seq[EdgeFactory[_]]
+      nodeFactories: Seq[NodeFactory[?]],
+      edgeFactories: Seq[EdgeFactory[?]]
     ): Array[String] => Unit = args =>
         OParser
             .parse(parser, args, Config(Paths.get("/dev/null"), null, Paths.get("/dev/null")))

@@ -4,8 +4,8 @@ import RepeatBehaviour.*
 
 trait RepeatBehaviour[A]:
     val searchAlgorithm: SearchAlgorithm.Value
-    val untilCondition: Option[A => Iterator[_]]
-    val whileCondition: Option[A => Iterator[_]]
+    val untilCondition: Option[A => Iterator[?]]
+    val whileCondition: Option[A => Iterator[?]]
     val maxDepth: Option[Int]
     val dedupEnabled: Boolean
 
@@ -36,12 +36,12 @@ object RepeatBehaviour:
     def noop[A](builder: RepeatBehaviour.Builder[A]): Builder[A] = builder
 
     class Builder[A]:
-        private[this] var _shouldEmit: (A, Int) => Boolean                      = (_, _) => false
-        private[this] var _untilCondition: Option[Traversal[A] => Traversal[_]] = None
-        private[this] var _whileCondition: Option[Traversal[A] => Traversal[_]] = None
-        private[this] var _maxDepth: Option[Int]                                = None
-        private[this] var _dedupEnabled: Boolean                                = false
-        private[this] var _searchAlgorithm: SearchAlgorithm.Value = SearchAlgorithm.DepthFirst
+        private var _shouldEmit: (A, Int) => Boolean                      = (_, _) => false
+        private var _untilCondition: Option[Traversal[A] => Traversal[?]] = None
+        private var _whileCondition: Option[Traversal[A] => Traversal[?]] = None
+        private var _maxDepth: Option[Int]                                = None
+        private var _dedupEnabled: Boolean                                = false
+        private var _searchAlgorithm: SearchAlgorithm.Value = SearchAlgorithm.DepthFirst
 
         /** configure search algorithm to go "breadth first", rather than the default "depth first"
           */

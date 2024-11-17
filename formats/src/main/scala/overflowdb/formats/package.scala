@@ -21,10 +21,10 @@ package object formats:
       */
     def isList(clazz: Class[?]): Boolean =
         clazz.isArray ||
-            classOf[java.lang.Iterable[_]].isAssignableFrom(clazz) ||
-            classOf[IterableOnce[_]].isAssignableFrom(clazz)
+            classOf[java.lang.Iterable[?]].isAssignableFrom(clazz) ||
+            classOf[IterableOnce[?]].isAssignableFrom(clazz)
 
-    val iterableForList: PartialFunction[Any, Iterable[_]] = {
+    val iterableForList: PartialFunction[Any, Iterable[?]] = {
         case it: Iterable[?]           => it
         case it: IterableOnce[?]       => it.iterator.toSeq
         case it: java.lang.Iterable[?] => it.asScala

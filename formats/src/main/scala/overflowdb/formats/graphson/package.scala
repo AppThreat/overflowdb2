@@ -43,7 +43,7 @@ package object graphson:
                 Type.Double
             else if clazz.isAssignableFrom(classOf[String]) then
                 Type.String
-            else if clazz.isAssignableFrom(classOf[List[_]]) then
+            else if clazz.isAssignableFrom(classOf[List[?]]) then
                 Type.List
             else
                 throw new AssertionError(

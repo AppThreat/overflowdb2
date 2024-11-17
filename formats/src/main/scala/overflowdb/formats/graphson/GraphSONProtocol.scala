@@ -40,7 +40,7 @@ object GraphSONProtocol extends DefaultJsonProtocol:
                     )
                 case x => serializationError(s"unsupported propertyValue: $x")
 
-        def read(value: JsValue): PropertyValue with Product =
+        def read(value: JsValue): PropertyValue & Product =
             value match
                 case JsString(v)  => return StringValue(v)
                 case JsBoolean(v) => return BooleanValue(v)
@@ -50,7 +50,7 @@ object GraphSONProtocol extends DefaultJsonProtocol:
                 case x: Seq[?]                    => readNonList(x)
                 case null                         => deserializationError("PropertyValue expected")
 
-        def readNonList(value: Seq[?]): PropertyValue with Product = value match
+        def readNonList(value: Seq[?]): PropertyValue & Product = value match
             case Seq(JsNumber(v), JsString(typ)) =>
                 if typ.equals(Type.Long.typ) then LongValue(v.toLongExact)
                 else if typ.equals(Type.Int.typ) then IntValue(v.toIntExact)
@@ -64,7 +64,7 @@ object GraphSONProtocol extends DefaultJsonProtocol:
     implicit object LongValueFormat extends RootJsonFormat[LongValue]:
         def write(c: LongValue): JsValue = PropertyValueJsonFormat.write(c)
 
-        def read(value: JsValue): LongValue with Product =
+        def read(value: JsValue): LongValue & Product =
             value.asJsObject.getFields("@value", "@type") match
                 case Seq(JsNumber(v), JsString(typ)) if typ.equals(Type.Long.typ) =>
                     LongValue(v.toLongExact)

@@ -18,8 +18,8 @@ import scala.util.Using
 object ImporterMain extends App:
 
     def apply(
-      nodeFactories: Seq[NodeFactory[_]],
-      edgeFactories: Seq[EdgeFactory[_]],
+      nodeFactories: Seq[NodeFactory[?]],
+      edgeFactories: Seq[EdgeFactory[?]],
       convertPropertyForPersistence: Any => Any = identity
     ): Array[String] => Unit = args =>
         OParser
