@@ -34,30 +34,29 @@ public enum ValueTypes {
   }
 
   public static ValueTypes lookup(byte id) {
-    switch (id) {
-      case 0: return BOOLEAN;
-      case 1: return STRING;
-      case 2: return BYTE;
-      case 3: return SHORT;
-      case 4: return INTEGER;
-      case 5: return LONG;
-      case 6: return FLOAT;
-      case 7: return DOUBLE;
-      case 8: return LIST;
-      case 9: return NODE_REF;
-      case 10: return UNKNOWN;
-      case 11: return CHARACTER;
-      case 12: return ARRAY_BYTE;
-      case 13: return ARRAY_SHORT;
-      case 14: return ARRAY_INT;
-      case 15: return ARRAY_LONG;
-      case 16: return ARRAY_FLOAT;
-      case 17: return ARRAY_DOUBLE;
-      case 18: return ARRAY_CHAR;
-      case 19: return ARRAY_BOOL;
-      case 20: return ARRAY_OBJECT;
-      default:
-        throw new IllegalArgumentException("unknown id type " + id);
-    }
+      return switch (id) {
+          case 0 -> BOOLEAN;
+          case 1 -> STRING;
+          case 2 -> BYTE;
+          case 3 -> SHORT;
+          case 4 -> INTEGER;
+          case 5 -> LONG;
+          case 6 -> FLOAT;
+          case 7 -> DOUBLE;
+          case 8 -> LIST;
+          case 9 -> NODE_REF;
+          case 10 -> UNKNOWN;
+          case 11 -> CHARACTER;
+          case 12 -> ARRAY_BYTE;
+          case 13 -> ARRAY_SHORT;
+          case 14 -> ARRAY_INT;
+          case 15 -> ARRAY_LONG;
+          case 16 -> ARRAY_FLOAT;
+          case 17 -> ARRAY_DOUBLE;
+          case 18 -> ARRAY_CHAR;
+          case 19 -> ARRAY_BOOL;
+          case 20 -> ARRAY_OBJECT;
+          default -> throw new IllegalArgumentException("unknown id type " + id);
+      };
   }
 }

@@ -25,7 +25,7 @@ object Neo4jCsvExporter extends Exporter:
       nodes: IterableOnce[Node],
       edges: IterableOnce[Edge],
       outputRootDirectory: Path
-    ) =
+    ): ExportResult =
         val nodesByLabel = nodes.iterator.toSeq.groupBy(_.label).filter(_._2.nonEmpty)
         val CountAndFiles(nodeCount, nodeFiles) = nodesByLabel
             .map { case (label, nodes) =>

@@ -5,14 +5,7 @@ import overflowdb.util.DummyEdgeIterator;
 import overflowdb.util.MultiIterator;
 import overflowdb.util.PropertyHelper;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Holds node properties and edges to adjacent nodes (including edge properties).
@@ -118,7 +111,7 @@ public abstract class NodeDb extends Node {
 
     for (String propertyKey : propertyKeys()) {
       final Object value = property(propertyKey);
-      /** note: not differentiating `null` and `default value` is a bug - we won't fix it for now, but want to state that as a fact here... */
+      /* note: not differentiating `null` and `default value` is a bug - we won't fix it for now, but want to state that as a fact here... */
       if (value != null && !value.equals(propertyDefaultValue(propertyKey))) results.put(propertyKey, value);
     }
 
@@ -319,10 +312,9 @@ public abstract class NodeDb extends Node {
   @Override
   protected void addEdgeSilentImpl(String label, Node inNode, Object... keyValues) {
     final NodeRef inNodeRef = (NodeRef) inNode;
-    NodeRef thisNodeRef = ref;
 
-    storeAdjacentNode(Direction.OUT, label, inNodeRef, keyValues);
-    inNodeRef.get().storeAdjacentNode(Direction.IN, label, thisNodeRef, keyValues);
+      storeAdjacentNode(Direction.OUT, label, inNodeRef, keyValues);
+    inNodeRef.get().storeAdjacentNode(Direction.IN, label, ref, keyValues);
   }
 
   @Override
@@ -507,8 +499,7 @@ public abstract class NodeDb extends Node {
       if (adjacentNodeWithProperty != null &&
           adjacentNodeWithProperty.id() == adjacentNode.id()) {
         if (currentOccurrence == occurrence) {
-          int adjacentNodeIndex = i - start;
-          return adjacentNodeIndex;
+            return i - start;
         } else {
           currentOccurrence++;
         }
@@ -572,7 +563,7 @@ public abstract class NodeDb extends Node {
     }
   }
 
-  private final <A extends Node> Iterator<A> createAdjacentNodeIterator(Direction direction, String... labels) {
+  private <A extends Node> Iterator<A> createAdjacentNodeIterator(Direction direction, String... labels) {
     if (labels.length == 1) {
       return createAdjacentNodeIteratorByOffSet(getPositionInEdgeOffsets(direction, labels[0]));
     } else {
@@ -616,7 +607,7 @@ public abstract class NodeDb extends Node {
     }
   }
 
-  private final String[] allowedLabelsByDirection(Direction direction) {
+  private String[] allowedLabelsByDirection(Direction direction) {
     if (direction.equals(Direction.OUT))
       return layoutInformation().allowedOutEdgeLabels();
     else if (direction.equals(Direction.IN))
@@ -644,7 +635,7 @@ public abstract class NodeDb extends Node {
   }
 
   //implicitly synchronized -- caller already holds monitor
-  private final int storeAdjacentNode(Direction direction, String edgeLabel, NodeRef nodeRef) {
+  private int storeAdjacentNode(Direction direction, String edgeLabel, NodeRef nodeRef) {
     AdjacentNodes tmp = this.adjacentNodes; //load acquire
     int offsetPos = getPositionInEdgeOffsets(direction, edgeLabel);
     if (offsetPos == -1) {
@@ -671,8 +662,7 @@ public abstract class NodeDb extends Node {
     tmp = tmp.setOffset(2 * offsetPos + 1, length + strideSize);
 
     this.adjacentNodes = tmp; //store release
-    int blockOffset = length;
-    return blockOffset;
+      return length;
   }
 
   public int startIndex(AdjacentNodes adjacentNodesTmp, int offsetPosition) {
@@ -692,18 +682,14 @@ public abstract class NodeDb extends Node {
   /**
    * @return The position in edgeOffsets array. -1 if the edge label is not supported
    */
-  private final int getPositionInEdgeOffsets(Direction direction, String label) {
+  private int getPositionInEdgeOffsets(Direction direction, String label) {
     final Integer positionOrNull;
     if (direction == Direction.OUT) {
       positionOrNull = layoutInformation().outEdgeToOffsetPosition(label);
     } else {
       positionOrNull = layoutInformation().inEdgeToOffsetPosition(label);
     }
-    if (positionOrNull != null) {
-      return positionOrNull;
-    } else {
-      return -1;
-    }
+      return Objects.requireNonNullElse(positionOrNull, -1);
   }
 
   /**
@@ -721,8 +707,8 @@ public abstract class NodeDb extends Node {
    * (tradeoff between performance and memory).
    * grows with the square root of the double of the current capacity.
    */
-  private final AdjacentNodes growAdjacentNodesWithEdgeProperties(
-      AdjacentNodes adjacentNodesOld, int offsetPos, int strideSize, int insertAt, int currentLength) {
+  private AdjacentNodes growAdjacentNodesWithEdgeProperties(
+          AdjacentNodes adjacentNodesOld, int offsetPos, int strideSize, int insertAt, int currentLength) {
     int growthEmptyFactor = 2;
     int additionalEntriesCount = (currentLength + strideSize) * growthEmptyFactor;
     Object[] nodesWithEdgePropertiesOld = adjacentNodesOld.nodesWithEdgeProperties;

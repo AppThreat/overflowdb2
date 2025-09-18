@@ -9,7 +9,7 @@ import java.util.function.Function;
 
 /**
  * Lightweight (w.r.t. memory usage) reference to for an NodeDb, which is stored in the `node` member.
- * When running low on memory (as detected by {{@link HeapUsageMonitor}}), the {{@link ReferenceManager}} may set
+ * When running low on memory, the {{@link ReferenceManager}} may set
  * that member to `null`, so that the garbage collector can free up some heap, thus avoiding @{@link OutOfMemoryError}.
  * Note that this model only works if nothing else holds references to the {@link NodeDb} - which is therefor strongly
  * discouraged. Instead, the entire application should only ever hold onto {@link NodeRef} instances.
@@ -93,7 +93,7 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
   }
 
   /** deserialize node from disk, synchronized to ensure this only happens once in a multi-threaded setup */
-  private final synchronized N getSynchronized() throws IOException {
+  private synchronized N getSynchronized() throws IOException {
     final N ref = node;
     /* checking again, in case another thread came here first and deserialized the node from disk */
     if (ref != null) {

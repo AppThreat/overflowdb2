@@ -11,6 +11,7 @@ import java.util.NoSuchElementException;
  */
 public final class MultiIterator<T> implements Iterator<T>, Serializable {
 
+  @SafeVarargs
   public static <A> MultiIterator<A> from(Iterator<A>... iterators) {
     MultiIterator<A> result = new MultiIterator<>();
     for (Iterator iter : iterators) result.addIterator(iter);

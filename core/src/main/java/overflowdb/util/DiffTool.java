@@ -75,29 +75,20 @@ public class DiffTool {
    */
   public static boolean arraysEqual(Object value1, Object value2) {
     // need to check all array types unfortunately
-    if (value1 instanceof Object[] && value2 instanceof Object[]) {
-      return Arrays.deepEquals((Object[]) value1, (Object[]) value2);
-    } else if (value1 instanceof boolean[] && value2 instanceof int[]) {
-      return Arrays.equals((boolean[]) value1, (boolean[]) value2);
-    } else if (value1 instanceof byte[] && value2 instanceof byte[]) {
-      return Arrays.equals((byte[]) value1, (byte[]) value2);
-    } else if (value1 instanceof char[] && value2 instanceof char[]) {
-      return Arrays.equals((char[]) value1, (char[]) value2);
-    } else if (value1 instanceof short[] && value2 instanceof short[]) {
-      return Arrays.equals((short[]) value1, (short[]) value2);
-    } else if (value1 instanceof int[] && value2 instanceof int[]) {
-      return Arrays.equals((int[]) value1, (int[]) value2);
-    } else if (value1 instanceof long[] && value2 instanceof long[]) {
-      return Arrays.equals((long[]) value1, (long[]) value2);
-    } else if (value1 instanceof float[] && value2 instanceof float[]) {
-      return Arrays.equals((float[]) value1, (float[]) value2);
-    } else if (value1 instanceof double[] && value2 instanceof double[]) {
-      return Arrays.equals((double[]) value1, (double[]) value2);
-    } else {
-      throw new AssertionError(String.format(
-        "unable to compare given objects (%s of type %s; %s of type %s)",
-        value1, value1.getClass(), value2, value2.getClass()));
-    }
+      return switch (value1) {
+          case Object[] objects when value2 instanceof Object[] -> Arrays.deepEquals(objects, (Object[]) value2);
+          case boolean[] booleans when value2 instanceof int[] -> Arrays.equals(booleans, (boolean[]) value2);
+          case byte[] bytes when value2 instanceof byte[] -> Arrays.equals(bytes, (byte[]) value2);
+          case char[] chars when value2 instanceof char[] -> Arrays.equals(chars, (char[]) value2);
+          case short[] shorts when value2 instanceof short[] -> Arrays.equals(shorts, (short[]) value2);
+          case int[] ints when value2 instanceof int[] -> Arrays.equals(ints, (int[]) value2);
+          case long[] longs when value2 instanceof long[] -> Arrays.equals(longs, (long[]) value2);
+          case float[] floats when value2 instanceof float[] -> Arrays.equals(floats, (float[]) value2);
+          case double[] doubles when value2 instanceof double[] -> Arrays.equals(doubles, (double[]) value2);
+          default -> throw new AssertionError(String.format(
+                  "unable to compare given objects (%s of type %s; %s of type %s)",
+                  value1, value1.getClass(), value2, value2.getClass()));
+      };
   }
 
   private static void compareEdges(Iterator<Edge> edges1, Iterator<Edge> edges2, List<String> diff, String context) {

@@ -2,5 +2,5 @@ package overflowdb.util
 
 /** Wraps a java iterator into a scala iterator, and casts it's elements. */
 class JIteratorCastingWrapper[A](underlying: java.util.Iterator[?]) extends Iterator[A]:
-    def hasNext   = underlying.hasNext
-    def next(): A = underlying.next.asInstanceOf[A]
+    def hasNext: Boolean = underlying.hasNext
+    def next(): A        = underlying.next.asInstanceOf[A]

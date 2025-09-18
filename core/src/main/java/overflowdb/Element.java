@@ -21,8 +21,8 @@ public abstract class Element {
   }
 
   public <A> A property(PropertyKey<A> key, A defaultValue) {
-    Object value = property(key);
-    return value != null ? (A) value : defaultValue;
+    A value = property(key);
+    return value != null ? value : defaultValue;
   }
 
   /** override this in specific element class, to define a default value */
@@ -38,8 +38,9 @@ public abstract class Element {
   public abstract Map<String, Object> propertiesMap();
 
 
-  @Deprecated public final void setProperty(String key, Object value) {setPropertyImpl(key, value);};
-  protected abstract void setPropertyImpl(String key, Object value);
+  @Deprecated public final void setProperty(String key, Object value) {setPropertyImpl(key, value);}
+
+    protected abstract void setPropertyImpl(String key, Object value);
   final void setPropertyInternal(String key, Object value) {setPropertyImpl(key, value);}
 
   @Deprecated public final <A> void setProperty(PropertyKey<A> key, A value){setPropertyImpl(key, value);}
@@ -57,8 +58,9 @@ public abstract class Element {
   final void removePropertyInternal(String key){removePropertyImpl(key);}
 
 
-  @Deprecated public final void remove(){removeImpl();};
+  @Deprecated public final void remove(){removeImpl();}
+
   protected abstract void removeImpl();
-  final void removeInternal(){removeImpl();};
+  final void removeInternal(){removeImpl();}
 
 }

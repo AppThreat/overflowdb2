@@ -26,7 +26,7 @@ object DependencySequencer:
       accumulator: Seq[Set[A]],
       visited: Set[A]
     ): Seq[Set[A]] =
-        if nodes.size == 0 then
+        if nodes.isEmpty then
             accumulator
         else
             val getParents = implicitly[GetParents[A]]

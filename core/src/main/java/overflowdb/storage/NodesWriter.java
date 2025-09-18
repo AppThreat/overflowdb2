@@ -6,7 +6,6 @@ import overflowdb.NodeRef;
 
 import java.io.IOException;
 import java.util.Spliterator;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.StreamSupport;
 
 /**
@@ -27,27 +26,14 @@ public class NodesWriter {
    * Serialization happens in parallel, however writing to storage happens sequentially, to avoid lock contention in mvstore.
    */
   public void writeAndClearBatched(Spliterator<? extends Node> nodes, int estimatedTotalCount) {
-    if (estimatedTotalCount > 0) {}
-
-    AtomicInteger count = new AtomicInteger(0);
-
     StreamSupport.stream(nodes, true)
         .map(this::serializeIfDirty)
         .sequential()
         .forEach(serializedNode -> {
           if (serializedNode != null) {
             storage.persist(serializedNode.id, serializedNode.data);
-
-            /** counting only for printing statistics - this is rafher slow, but since persisting to disk is much slower
-             * and also disk-bound, it doesn't really matter... */
-            int currCount = count.incrementAndGet();
-            if (currCount % 100_000 == 0) {
-               float progressPercent = 100f * currCount / estimatedTotalCount;
-            }
           }
         });
-
-    if (estimatedTotalCount > 0) {}
   }
   private SerializedNode serializeIfDirty(Node node) {
     NodeDb nodeDb = null;

@@ -87,7 +87,7 @@ public class NodeDeserializer extends BookKeeper {
     }
   }
 
-  private final Object[] unpackProperties(MessageUnpacker unpacker) throws IOException {
+  private Object[] unpackProperties(MessageUnpacker unpacker) throws IOException {
     int propertyCount = unpacker.unpackMapHeader();
     Object[] res = new Object[propertyCount * 2];
     int resIdx = 0;
@@ -102,65 +102,44 @@ public class NodeDeserializer extends BookKeeper {
     return res;
   }
 
-  private final Object unpackValue(final ArrayValue packedValueAndType) {
+  private Object unpackValue(final ArrayValue packedValueAndType) {
     final Iterator<Value> iter = packedValueAndType.iterator();
    final byte valueTypeId = iter.next().asIntegerValue().asByte();
     final Value value = iter.next();
 
-    switch (ValueTypes.lookup(valueTypeId)) {
-      case UNKNOWN:
-        return null;
-      case NODE_REF:
-        long id = value.asIntegerValue().asLong();
-        return graph.node(id);
-      case BOOLEAN:
-        return value.asBooleanValue().getBoolean();
-      case STRING:
-        return stringInterner.intern(value.asStringValue().asString());
-      case BYTE:
-        return value.asIntegerValue().asByte();
-      case SHORT:
-        return value.asIntegerValue().asShort();
-      case INTEGER:
-        return value.asIntegerValue().asInt();
-      case LONG:
-        return value.asIntegerValue().asLong();
-      case FLOAT:
-        return value.asFloatValue().toFloat();
-      case DOUBLE:
-        return value.asFloatValue().toDouble();
-      case LIST:
-        return deserializeList(value.asArrayValue());
-      case CHARACTER:
-        return (char) value.asIntegerValue().asInt();
-      case ARRAY_BYTE:
-        return deserializeArrayByte(value.asArrayValue());
-      case ARRAY_SHORT:
-        return deserializeArrayShort(value.asArrayValue());
-      case ARRAY_INT:
-        return deserializeArrayInt(value.asArrayValue());
-      case ARRAY_LONG:
-        return deserializeArrayLong(value.asArrayValue());
-      case ARRAY_FLOAT:
-        return deserializeArrayFloat(value.asArrayValue());
-      case ARRAY_DOUBLE:
-        return deserializeArrayDouble(value.asArrayValue());
-      case ARRAY_CHAR:
-        return deserializeArrayChar(value.asArrayValue());
-      case ARRAY_BOOL:
-        return deserializeArrayBoolean(value.asArrayValue());
-      case ARRAY_OBJECT:
-        return deserializeArrayObject(value.asArrayValue());
-      default:
-        throw new UnsupportedOperationException("unknown valueTypeId=`" + valueTypeId);
-    }
+      return switch (ValueTypes.lookup(valueTypeId)) {
+          case UNKNOWN -> null;
+          case NODE_REF -> {
+              long id = value.asIntegerValue().asLong();
+              yield graph.node(id);
+          }
+          case BOOLEAN -> value.asBooleanValue().getBoolean();
+          case STRING -> stringInterner.intern(value.asStringValue().asString());
+          case BYTE -> value.asIntegerValue().asByte();
+          case SHORT -> value.asIntegerValue().asShort();
+          case INTEGER -> value.asIntegerValue().asInt();
+          case LONG -> value.asIntegerValue().asLong();
+          case FLOAT -> value.asFloatValue().toFloat();
+          case DOUBLE -> value.asFloatValue().toDouble();
+          case LIST -> deserializeList(value.asArrayValue());
+          case CHARACTER -> (char) value.asIntegerValue().asInt();
+          case ARRAY_BYTE -> deserializeArrayByte(value.asArrayValue());
+          case ARRAY_SHORT -> deserializeArrayShort(value.asArrayValue());
+          case ARRAY_INT -> deserializeArrayInt(value.asArrayValue());
+          case ARRAY_LONG -> deserializeArrayLong(value.asArrayValue());
+          case ARRAY_FLOAT -> deserializeArrayFloat(value.asArrayValue());
+          case ARRAY_DOUBLE -> deserializeArrayDouble(value.asArrayValue());
+          case ARRAY_CHAR -> deserializeArrayChar(value.asArrayValue());
+          case ARRAY_BOOL -> deserializeArrayBoolean(value.asArrayValue());
+          case ARRAY_OBJECT -> deserializeArrayObject(value.asArrayValue());
+      };
   }
 
   protected final NodeRef createNodeRef(long id, String label) {
     return getNodeFactory(label).createNodeRef(graph, id);
   }
 
-  private final NodeFactory getNodeFactory(String label) {
+  private NodeFactory getNodeFactory(String label) {
     if (!nodeFactoryByLabel.containsKey(label))
       throw new AssertionError(String.format("nodeFactory not found for label=%s", label));
 
@@ -170,100 +149,90 @@ public class NodeDeserializer extends BookKeeper {
   /** only keeping for legacy reasons, going forward, all lists are stored as arrays */
   private Object deserializeList(ArrayValue arrayValue) {
     final List deserializedList = new ArrayList(arrayValue.size());
-    final Iterator<Value> valueIterator = arrayValue.iterator();
-    while (valueIterator.hasNext()) {
-      deserializedList.add(unpackValue(valueIterator.next().asArrayValue()));
-    }
+      for (Value value : arrayValue) {
+          deserializedList.add(unpackValue(value.asArrayValue()));
+      }
     return deserializedList;
   }
 
   private byte[] deserializeArrayByte(ArrayValue arrayValue) {
     byte[] deserializedArray = new byte[arrayValue.size()];
     int idx = 0;
-    final Iterator<Value> valueIterator = arrayValue.iterator();
-    while (valueIterator.hasNext()) {
-      deserializedArray[idx++] = valueIterator.next().asIntegerValue().asByte();
-    }
+      for (Value value : arrayValue) {
+          deserializedArray[idx++] = value.asIntegerValue().asByte();
+      }
     return deserializedArray;
   }
 
   private short[] deserializeArrayShort(ArrayValue arrayValue) {
     short[] deserializedArray = new short[arrayValue.size()];
     int idx = 0;
-    final Iterator<Value> valueIterator = arrayValue.iterator();
-    while (valueIterator.hasNext()) {
-      deserializedArray[idx++] = valueIterator.next().asIntegerValue().asShort();
-    }
+      for (Value value : arrayValue) {
+          deserializedArray[idx++] = value.asIntegerValue().asShort();
+      }
     return deserializedArray;
   }
 
   private int[] deserializeArrayInt(ArrayValue arrayValue) {
     int[] deserializedArray = new int[arrayValue.size()];
     int idx = 0;
-    final Iterator<Value> valueIterator = arrayValue.iterator();
-    while (valueIterator.hasNext()) {
-      deserializedArray[idx++] = valueIterator.next().asIntegerValue().asInt();
-    }
+      for (Value value : arrayValue) {
+          deserializedArray[idx++] = value.asIntegerValue().asInt();
+      }
     return deserializedArray;
   }
 
   private long[] deserializeArrayLong(ArrayValue arrayValue) {
     long[] deserializedArray = new long[arrayValue.size()];
     int idx = 0;
-    final Iterator<Value> valueIterator = arrayValue.iterator();
-    while (valueIterator.hasNext()) {
-      deserializedArray[idx++] = valueIterator.next().asIntegerValue().asLong();
-    }
+      for (Value value : arrayValue) {
+          deserializedArray[idx++] = value.asIntegerValue().asLong();
+      }
     return deserializedArray;
   }
 
   private float[] deserializeArrayFloat(ArrayValue arrayValue) {
     float[] deserializedArray = new float[arrayValue.size()];
     int idx = 0;
-    final Iterator<Value> valueIterator = arrayValue.iterator();
-    while (valueIterator.hasNext()) {
-      deserializedArray[idx++] = valueIterator.next().asFloatValue().toFloat();
-    }
+      for (Value value : arrayValue) {
+          deserializedArray[idx++] = value.asFloatValue().toFloat();
+      }
     return deserializedArray;
   }
 
   private double[] deserializeArrayDouble(ArrayValue arrayValue) {
     double[] deserializedArray = new double[arrayValue.size()];
     int idx = 0;
-    final Iterator<Value> valueIterator = arrayValue.iterator();
-    while (valueIterator.hasNext()) {
-      deserializedArray[idx++] = valueIterator.next().asFloatValue().toDouble();
-    }
+      for (Value value : arrayValue) {
+          deserializedArray[idx++] = value.asFloatValue().toDouble();
+      }
     return deserializedArray;
   }
 
   private char[] deserializeArrayChar(ArrayValue arrayValue) {
     char[] deserializedArray = new char[arrayValue.size()];
     int idx = 0;
-    final Iterator<Value> valueIterator = arrayValue.iterator();
-    while (valueIterator.hasNext()) {
-      deserializedArray[idx++] = (char) valueIterator.next().asIntegerValue().asInt();
-    }
+      for (Value value : arrayValue) {
+          deserializedArray[idx++] = (char) value.asIntegerValue().asInt();
+      }
     return deserializedArray;
   }
 
   private boolean[] deserializeArrayBoolean(ArrayValue arrayValue) {
     boolean[] deserializedArray = new boolean[arrayValue.size()];
     int idx = 0;
-    final Iterator<Value> valueIterator = arrayValue.iterator();
-    while (valueIterator.hasNext()) {
-      deserializedArray[idx++] = valueIterator.next().asBooleanValue().getBoolean();
-    }
+      for (Value value : arrayValue) {
+          deserializedArray[idx++] = value.asBooleanValue().getBoolean();
+      }
     return deserializedArray;
   }
 
   private Object[] deserializeArrayObject(ArrayValue arrayValue) {
     Object[] deserializedArray = new Object[arrayValue.size()];
     int idx = 0;
-    final Iterator<Value> valueIterator = arrayValue.iterator();
-    while (valueIterator.hasNext()) {
-      deserializedArray[idx++] = unpackValue(valueIterator.next().asArrayValue());
-    }
+      for (Value value : arrayValue) {
+          deserializedArray[idx++] = unpackValue(value.asArrayValue());
+      }
     return deserializedArray;
   }
 }

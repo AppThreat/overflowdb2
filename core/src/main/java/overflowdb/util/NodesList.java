@@ -84,11 +84,11 @@ public class NodesList {
     nodes[index] = null;
     emptySlots.set(index);
 
-    /** We drop the entire `nodesByLabel` index and will rebuild it on the next index lookup...
-      * Context: we don't know the exact position of this node in the `nodesByLabel` index, and
-      * searching it is O(n).
-      * We considered using a separate TLongIntMap for the Id->Index mapping, but that would
-      * consume 12-20b per node */
+    /* We drop the entire `nodesByLabel` index and will rebuild it on the next index lookup...
+       Context: we don't know the exact position of this node in the `nodesByLabel` index, and
+       searching it is O(n).
+       We considered using a separate TLongIntMap for the Id->Index mapping, but that would
+       consume 12-20b per node */
     this.nodesByLabel = null;
 
     size--;
@@ -114,12 +114,8 @@ public class NodesList {
       TMap<String, ArrayList<Node>> tmp = new THashMap<>();
       for (Node node : nodes) {
         if (node != null) {
-          ArrayList<Node> nodelist = tmp.get(node.label());
-          if (nodelist == null) {
-            nodelist = new ArrayList<>();
-            tmp.put(node.label(), nodelist);
-          }
-          nodelist.add(node);
+            ArrayList<Node> nodelist = tmp.computeIfAbsent(node.label(), k -> new ArrayList<>());
+            nodelist.add(node);
         }
       }
       this.nodesByLabel = tmp;
@@ -128,21 +124,16 @@ public class NodesList {
 
   public ArrayList<Node> nodesByLabel(String label) {
     TMap<String, ArrayList<Node>> nodesByLabel = getNodesByLabel();
-    ArrayList<Node> nodelist = nodesByLabel.get(label);
-    if (nodelist == null){
-      nodelist = new ArrayList<>();
-      nodesByLabel.put(label, nodelist);
-    }
-    return nodelist;
+      return nodesByLabel.computeIfAbsent(label, k -> new ArrayList<>());
   }
 
   public Set<String> nodeLabels() {
     TMap<String, ArrayList<Node>> nodesByLabel = getNodesByLabel();
     Set<String> ret = new HashSet<>(nodesByLabel.size());
-    nodesByLabel.entrySet().forEach(entry -> {
-      if (!entry.getValue().isEmpty()) {
-        ret.add(entry.getKey());
-      }
+    nodesByLabel.forEach((key, value) -> {
+        if (!value.isEmpty()) {
+            ret.add(key);
+        }
     });
     return ret;
   }
@@ -232,7 +223,7 @@ public class NodesList {
       return 0;
   }
 
-  public synchronized void persistAll(NodesWriter nodesWriter) {
+  public void persistAll(NodesWriter nodesWriter) {
     nodesWriter.writeAndClearBatched(Arrays.spliterator(nodes), nodes.length);
   }
 

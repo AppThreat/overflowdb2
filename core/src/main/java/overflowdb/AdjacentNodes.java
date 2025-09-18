@@ -35,65 +35,69 @@ public class AdjacentNodes {
    * getOffset(2 * kindOffset + 1) gets the length of the relevant slice in nodesWithEdgeProperties of the desired kindOffset (get the kindOffset from layout info)
    */
   public int getOffset(int pos){
-    if(offsets instanceof byte[]){
-      return ((byte[]) offsets)[pos];
-    } else if(offsets instanceof short[]){
-      return ((short[]) offsets)[pos];
-    } else if (offsets instanceof int[]){
-      return ((int[]) offsets)[pos];
-    } else throw new RuntimeException("corrupt state: offsets of type " + offsets.getClass().getName());
+      return switch (offsets) {
+          case byte[] bytes -> bytes[pos];
+          case short[] shorts -> shorts[pos];
+          case int[] ints -> ints[pos];
+          case null, default -> {
+              assert offsets != null;
+              throw new RuntimeException("corrupt state: offsets of type " + offsets.getClass().getName());
+          }
+      };
   }
 
   /** Attempts to update AdjacentNodes in-place and return this; otherwise, create a new AdjacentNodes and return that.
    * */
   AdjacentNodes setOffset(int pos, int val){
-    if(offsets instanceof byte[]) {
-      if(val == (byte) val){
-        ((byte[]) offsets)[pos] = (byte) val;
-        return this;
-      } else if (val == (short) val){
-        byte[] oldOffsets = (byte[]) offsets;
-        short[] newOffsets = new short[oldOffsets.length];
-        for(int i = 0; i < oldOffsets.length; i++){
-          newOffsets[i] = oldOffsets[i];
-        }
-        newOffsets[pos] = (short) val;
-        return new AdjacentNodes(nodesWithEdgeProperties, newOffsets);
-      } else {
-        byte[] oldOffsets = (byte[]) offsets;
-        int[] newOffsets = new int[oldOffsets.length];
-        for(int i = 0; i < oldOffsets.length; i++){
-          newOffsets[i] = oldOffsets[i];
-        }
-        newOffsets[pos] = val;
-        return new AdjacentNodes(nodesWithEdgeProperties, newOffsets);
+      switch (offsets) {
+          case byte[] oldOffsets -> {
+              if (val == (byte) val) {
+                  oldOffsets[pos] = (byte) val;
+                  return this;
+              } else if (val == (short) val) {
+                  short[] newOffsets = new short[oldOffsets.length];
+                  for (int i = 0; i < oldOffsets.length; i++) {
+                      newOffsets[i] = oldOffsets[i];
+                  }
+                  newOffsets[pos] = (short) val;
+                  return new AdjacentNodes(nodesWithEdgeProperties, newOffsets);
+              } else {
+                  int[] newOffsets = new int[oldOffsets.length];
+                  for (int i = 0; i < oldOffsets.length; i++) {
+                      newOffsets[i] = oldOffsets[i];
+                  }
+                  newOffsets[pos] = val;
+                  return new AdjacentNodes(nodesWithEdgeProperties, newOffsets);
+              }
+          }
+          case short[] oldOffsets -> {
+              if (val == (short) val) {
+                  oldOffsets[pos] = (short) val;
+                  return this;
+              } else {
+                  int[] newOffsets = new int[oldOffsets.length];
+                  for (int i = 0; i < oldOffsets.length; i++) {
+                      newOffsets[i] = oldOffsets[i];
+                  }
+                  newOffsets[pos] = val;
+                  return new AdjacentNodes(nodesWithEdgeProperties, newOffsets);
+              }
+          }
+          case int[] ints -> {
+              ints[pos] = val;
+              return this;
+          }
+          default -> throw new RuntimeException("corrupt state: offsets of type " + offsets.getClass().getName());
       }
-    } else if (offsets instanceof short[]){
-      if(val == (short) val){
-        ((short[]) offsets)[pos] = (short) val;
-        return this;
-      } else {
-        short[] oldOffsets = (short[]) offsets;
-        int[] newOffsets = new int[oldOffsets.length];
-        for(int i = 0; i < oldOffsets.length; i++){
-          newOffsets[i] = oldOffsets[i];
-        }
-        newOffsets[pos] = val;
-        return new AdjacentNodes(nodesWithEdgeProperties, newOffsets);
-      }
-    } else if (offsets instanceof int[]){
-      ((int[]) offsets)[pos] = val;
-      return this;
-    } else {
-      throw new RuntimeException("corrupt state: offsets of type " + offsets.getClass().getName());
-    }
   }
 
   public int offsetLengths(){
-    if(offsets instanceof int[]) return ((int[]) offsets).length;
-    else if (offsets instanceof short[]) return ((short[]) offsets).length;
-    else if (offsets instanceof byte[]) return ((byte[]) offsets).length;
-    else throw new RuntimeException();
+      return switch (offsets) {
+          case int[] ints -> ints.length;
+          case short[] shorts -> shorts.length;
+          case byte[] bytes -> bytes.length;
+          case null, default -> throw new RuntimeException();
+      };
   }
 
 }

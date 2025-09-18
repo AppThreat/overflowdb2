@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ReferenceManager implements AutoCloseable {
 
   public final int releaseCount = 100000;
-  private AtomicInteger totalReleaseCount = new AtomicInteger(0);
+  private final AtomicInteger totalReleaseCount = new AtomicInteger(0);
   private final ExecutorService executorService;
   private final boolean shutdownExecutorOnClose;
   private int clearingProcessCount = 0;
@@ -94,7 +94,7 @@ public class ReferenceManager implements AutoCloseable {
       if (clearableRefs.isEmpty()) {
         break;
       }
-      final NodeRef ref = clearableRefs.remove(0);
+      final NodeRef ref = clearableRefs.removeFirst();
       if (ref != null) {
         refsToClear.add(ref);
       }
