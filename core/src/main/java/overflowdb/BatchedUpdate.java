@@ -18,29 +18,29 @@ public class BatchedUpdate {
     }
 
     public interface KeyPool {
-        public long next();
+        long next();
     }
 
     public interface DiffOrBuilder {
-        public int size();
+        int size();
 
         Iterator<Change> iterator();
     }
 
     public interface ModificationListener {
-        public abstract void onAfterInitNewNode(Node node);
+        void onAfterInitNewNode(Node node);
 
-        public abstract void onAfterAddNewEdge(Edge edge);
+        void onAfterAddNewEdge(Edge edge);
 
-        public abstract void onBeforePropertyChange(Node node, String key);
+        void onBeforePropertyChange(Node node, String key);
 
-        public abstract void onAfterPropertyChange(Node node, String key, Object value);
+        void onAfterPropertyChange(Node node, String key, Object value);
 
-        public abstract void onBeforeRemoveNode(Node node);
+        void onBeforeRemoveNode(Node node);
 
-        public abstract void onBeforeRemoveEdge(Edge edge);
+        void onBeforeRemoveEdge(Edge edge);
 
-        public abstract void finish();
+        void finish();
     }
 
 
@@ -144,9 +144,9 @@ public class BatchedUpdate {
 
     public static class AppliedDiff {
         public DiffOrBuilder diffGraph;
-        private ModificationListener listener;
-        private int transitiveModifications;
-        private Graph graph;
+        private final ModificationListener listener;
+        private final int transitiveModifications;
+        private final Graph graph;
 
         AppliedDiff(Graph graph, DiffOrBuilder diffGraph, ModificationListener listener, int transitiveModifications) {
             this.graph = graph;
@@ -265,8 +265,8 @@ public class BatchedUpdate {
                     } else {
                         linkedNode = graph.addNode(keyPool.next(), detachedNode.label());
                     }
-                } else if (linkedNode instanceof Long) {
-                    linkedNode = graph.addNode(((Long) linkedNode).longValue(), detachedNode.label());
+                } else {
+                    linkedNode = graph.addNode((Long) linkedNode, detachedNode.label());
                 }
                 detachedNode.setRefOrId(linkedNode);
                 deferredInitializers.addLast(detachedNode);
@@ -290,9 +290,8 @@ public class BatchedUpdate {
             if (change instanceof DetachedNodeData) {
                 mapDetached((DetachedNodeData) change);
                 drainDeferred();
-            } else if (change instanceof CreateEdge) {
+            } else if (change instanceof CreateEdge create) {
                 nChanges += 1;
-                CreateEdge create = (CreateEdge) change;
                 Node src = create.src instanceof DetachedNodeData ? mapDetached((DetachedNodeData) create.src) : (Node) create.src;
                 Node dst = create.dst instanceof DetachedNodeData ? mapDetached((DetachedNodeData) create.dst) : (Node) create.dst;
                 drainDeferred();
@@ -303,22 +302,19 @@ public class BatchedUpdate {
                 } else {
                     src.addEdgeSilentInternal(create.label, dst, properties);
                 }
-            } else if (change instanceof RemoveEdge) {
+            } else if (change instanceof RemoveEdge remove) {
                 nChanges += 1;
-                RemoveEdge remove = (RemoveEdge) change;
                 if (listener != null)
                     listener.onBeforeRemoveEdge(remove.edge);
                 remove.edge.removeInternal();
-            } else if (change instanceof RemoveNode) {
+            } else if (change instanceof RemoveNode remove) {
                 nChanges += 1;
-                RemoveNode remove = (RemoveNode) change;
                 if (listener != null)
                     listener.onBeforeRemoveNode(remove.node);
                 remove.node.removeInternal();
 
-            } else if (change instanceof SetNodeProperty) {
+            } else if (change instanceof SetNodeProperty setProp) {
                 nChanges += 1;
-                SetNodeProperty setProp = (SetNodeProperty) change;
                 if (listener != null)
                     listener.onBeforePropertyChange(setProp.node, setProp.label);
                 setProp.node.setPropertyInternal(setProp.label, setProp.value);

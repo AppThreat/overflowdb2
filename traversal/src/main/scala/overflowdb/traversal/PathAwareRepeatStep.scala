@@ -35,10 +35,10 @@ object PathAwareRepeatStep:
             def hasNext: Boolean =
                 if emitSack.isEmpty then
                     // this may add elements to the emit sack and/or modify the worklist
-                    traverseOnWorklist
+                    traverseOnWorklist()
                 emitSack.nonEmpty || worklistTopHasNext
 
-            private def traverseOnWorklist: Unit =
+            private def traverseOnWorklist(): Unit =
                 var stop = false
                 while worklist.nonEmpty && !stop do
                     val WorklistItem(trav0, depth) = worklist.head

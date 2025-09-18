@@ -35,19 +35,19 @@ object RepeatStep:
 
     /** stack based worklist for [[RepeatBehaviour.SearchAlgorithm.DepthFirst]] */
     class LifoWorklist[A] extends Worklist[A]:
-        private val stack             = mutable.Stack.empty[A]
-        override def addItem(item: A) = stack.push(item)
-        override def nonEmpty         = stack.nonEmpty
-        override def head             = stack.top
-        override def removeHead()     = stack.pop()
+        private val stack                   = mutable.Stack.empty[A]
+        override def addItem(item: A): Unit = stack.push(item)
+        override def nonEmpty: Boolean      = stack.nonEmpty
+        override def head: A                = stack.top
+        override def removeHead(): Unit     = stack.pop()
 
     /** queue based worklist for [[RepeatBehaviour.SearchAlgorithm.BreadthFirst]] */
     class FifoWorklist[A] extends Worklist[A]:
-        private val queue             = mutable.Queue.empty[A]
-        override def addItem(item: A) = queue.enqueue(item)
-        override def nonEmpty         = queue.nonEmpty
-        override def head             = queue.head
-        override def removeHead()     = queue.dequeue()
+        private val queue                   = mutable.Queue.empty[A]
+        override def addItem(item: A): Unit = queue.enqueue(item)
+        override def nonEmpty: Boolean      = queue.nonEmpty
+        override def head: A                = queue.head
+        override def removeHead(): Unit     = queue.dequeue()
 
     case class WorklistItem[A](traversal: Iterator[A], depth: Int)
 end RepeatStep
@@ -69,10 +69,10 @@ class RepeatStepIterator[A](
     def hasNext: Boolean =
         if emitSack.isEmpty then
             // this may add elements to the emit sack and/or modify the worklist
-            traverseOnWorklist
+            traverseOnWorklist()
         emitSack.nonEmpty || worklistTopHasNext
 
-    private def traverseOnWorklist: Unit =
+    private def traverseOnWorklist(): Unit =
         var stop = false
         while worklist.nonEmpty && !stop do
             val WorklistItem(trav, depth) = worklist.head

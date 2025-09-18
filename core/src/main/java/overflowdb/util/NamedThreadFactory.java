@@ -1,7 +1,5 @@
 package overflowdb.util;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.ThreadFactory;
 
 public class NamedThreadFactory implements ThreadFactory {
@@ -12,6 +10,6 @@ public class NamedThreadFactory implements ThreadFactory {
   }
 
   public Thread newThread(Runnable r) {
-    return new Thread(() -> {r.run();}, threadName);
+    return new Thread(r, threadName);
   }
 }

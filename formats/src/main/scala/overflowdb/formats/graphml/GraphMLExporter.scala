@@ -23,7 +23,11 @@ object GraphMLExporter extends Exporter:
 
     override def defaultFileExtension = "xml"
 
-    override def runExport(nodes: IterableOnce[Node], edges: IterableOnce[Edge], outputFile: Path) =
+    override def runExport(
+      nodes: IterableOnce[Node],
+      edges: IterableOnce[Edge],
+      outputFile: Path
+    ): ExportResult =
         val outFile = resolveOutputFileSingle(outputFile, s"export.$defaultFileExtension")
         val nodePropertyContextById    = mutable.Map.empty[String, PropertyContext]
         val edgePropertyContextById    = mutable.Map.empty[String, PropertyContext]

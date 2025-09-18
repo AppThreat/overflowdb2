@@ -25,7 +25,7 @@ object StringPropertyFilter:
         val valueRegexs = regexps.map(regexpCompile)
         trav.filter { node =>
             val value = accessor(node)
-            valueRegexs.find(_.matches(value)).isDefined
+            valueRegexs.exists(_.matches(value))
         }
 
     def regexpNotMultiple[NodeType](
@@ -34,7 +34,7 @@ object StringPropertyFilter:
         val valueRegexs = regexps.map(regexpCompile)
         trav.filter { node =>
             val value = accessor(node)
-            valueRegexs.find(_.matches(value)).isEmpty
+            !valueRegexs.exists(_.matches(value))
         }
 
     /** compiles given string into a Regex which can be reused prefixes given string with `(?s)` to

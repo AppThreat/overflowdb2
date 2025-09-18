@@ -111,9 +111,9 @@ object RepeatBehaviour:
         private[traversal] def build: RepeatBehaviour[A] =
             new RepeatBehaviour[A]:
                 override val searchAlgorithm: SearchAlgorithm.Value = _searchAlgorithm
-                override val untilCondition =
+                override val untilCondition: Option[A => Traversal[?]] =
                     _untilCondition.map(_.andThen(_.iterator).compose(Iterator.single))
-                override val whileCondition =
+                override val whileCondition: Option[A => Traversal[?]] =
                     _whileCondition.map(_.andThen(_.iterator).compose(Iterator.single))
                 final override val maxDepth: Option[Int] = _maxDepth
                 final override val dedupEnabled          = _dedupEnabled

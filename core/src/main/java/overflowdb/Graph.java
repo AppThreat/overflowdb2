@@ -16,22 +16,22 @@ import java.util.function.Predicate;
 
 public final class Graph implements AutoCloseable {
 
-  protected final AtomicLong currentId = new AtomicLong(-1L);
+  private final AtomicLong currentId = new AtomicLong(-1L);
   final NodesList nodes = new NodesList();
   public final IndexManager indexManager = new IndexManager(this);
   private final Config config;
   private volatile boolean closed = false;
 
-  protected final Map<String, NodeFactory> nodeFactoryByLabel;
-  protected final Map<String, EdgeFactory> edgeFactoryByLabel;
+  private final Map<String, NodeFactory> nodeFactoryByLabel;
+  final Map<String, EdgeFactory> edgeFactoryByLabel;
 
-  protected final OdbStorage storage;
+  final OdbStorage storage;
   public final NodeSerializer nodeSerializer;
-  protected final NodeDeserializer nodeDeserializer;
-  protected final StringInterner stringInterner;
-  protected final boolean overflowEnabled;
-  protected final ReferenceManager referenceManager;
-  protected final NodesWriter nodesWriter;
+  final NodeDeserializer nodeDeserializer;
+  private final StringInterner stringInterner;
+  private final boolean overflowEnabled;
+  private final ReferenceManager referenceManager;
+  private final NodesWriter nodesWriter;
 
   /**
    * @param convertPropertyForPersistence applied to all element property values by @{@link NodeSerializer} prior
@@ -88,33 +88,24 @@ public final class Graph implements AutoCloseable {
     long start = System.currentTimeMillis();
     final Set<Map.Entry<Long, byte[]>> serializedNodes = storage.allNodes();
     final int serializedNodesCount = serializedNodes.size();
-    if (serializedNodesCount > 0) {
-    }
     int importCount = 0;
     long maxId = currentId.get();
 
-    final Iterator<Map.Entry<Long, byte[]>> serializedVertexIter = serializedNodes.iterator();
-    while (serializedVertexIter.hasNext()) {
-      final Map.Entry<Long, byte[]> entry = serializedVertexIter.next();
-      try {
-        final NodeRef nodeRef = nodeDeserializer.deserializeRef(entry.getValue());
-        nodes.add(nodeRef);
-        importCount++;
-        if (importCount % 131072 == 0) { // some random magic number that allows for quick division
-        }
-        if (nodeRef.id > maxId) maxId = nodeRef.id;
-      } catch (IOException e) {
-        throw new RuntimeException("error while initializing vertex from storage: id=" + entry.getKey(), e);
+      for (Map.Entry<Long, byte[]> entry : serializedNodes) {
+          try {
+              final NodeRef nodeRef = nodeDeserializer.deserializeRef(entry.getValue());
+              nodes.add(nodeRef);
+              importCount++;
+              if (nodeRef.id > maxId) maxId = nodeRef.id;
+          } catch (IOException e) {
+              throw new RuntimeException("error while initializing vertex from storage: id=" + entry.getKey(), e);
+          }
       }
-    }
 
     currentId.set(maxId + 1);
     indexManager.initializeStoredIndices(storage);
     long elapsedMillis = System.currentTimeMillis() - start;
   }
-
-
-  ////////////// STRUCTURE API METHODS //////////////////
 
   /**
    * Add a node with given label and properties
@@ -290,7 +281,7 @@ public final class Graph implements AutoCloseable {
 
   /** Iterator over all edges */
   public Iterator<Edge> edges() {
-    return IteratorUtils.flatMap(nodes(), node -> node.outE());
+    return IteratorUtils.flatMap(nodes(), Node::outE);
   }
 
   /** Iterator over edges with given label */
@@ -304,7 +295,7 @@ public final class Graph implements AutoCloseable {
   }
 
   /** Iterator over all nodes */
-  public final Iterator<Node> nodes() {
+  public Iterator<Node> nodes() {
     return nodes.iterator();
   }
 
@@ -364,7 +355,7 @@ public final class Graph implements AutoCloseable {
     return multiIterator;
   }
 
-  private final void addNodesToMultiIterator(final MultiIterator<Node> multiIterator, final String label) {
+  private void addNodesToMultiIterator(final MultiIterator<Node> multiIterator, final String label) {
     final Collection<Node> ret = nodes.nodesByLabel(label);
     if (ret != null) {
       multiIterator.addIterator(ret.iterator());
@@ -382,9 +373,7 @@ public final class Graph implements AutoCloseable {
   /** Copies all nodes/edges into the given empty graph, preserving their ids and properties. */
   public void copyTo(Graph destination) {
     if (destination.nodeCount() > 0) throw new AssertionError("destination graph must be empty, but isn't");
-    nodes().forEachRemaining(node -> {
-      destination.addNode(node.id(), node.label(), PropertyHelper.toKeyValueArray(node.propertiesMap()));
-    });
+    nodes().forEachRemaining(node -> destination.addNode(node.id(), node.label(), PropertyHelper.toKeyValueArray(node.propertiesMap())));
     nodes().forEachRemaining( node -> {
       NodeDb mapped =  ((NodeRef<NodeDb>) destination.node(node.id())).get();
 

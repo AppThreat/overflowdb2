@@ -145,97 +145,114 @@ public class NodeSerializer extends BookKeeper {
    */
   private void packTypedValue(final MessageBufferPacker packer, final Object value) throws IOException {
     packer.packArrayHeader(2);
-    if (value == null) {
-      packer.packByte(ValueTypes.UNKNOWN.id);
-      packer.packNil();
-    } else if (value instanceof NodeRef) {
-      packer.packByte(ValueTypes.NODE_REF.id);
-      packer.packLong(((NodeRef) value).id());
-    } else if (value instanceof Boolean) {
-      packer.packByte(ValueTypes.BOOLEAN.id);
-      packer.packBoolean((Boolean) value);
-    } else if (value instanceof String) {
-      packer.packByte(ValueTypes.STRING.id);
-      packer.packString((String) value);
-    } else if (value instanceof Byte) {
-      packer.packByte(ValueTypes.BYTE.id);
-      packer.packByte((byte) value);
-    } else if (value instanceof Short) {
-      packer.packByte(ValueTypes.SHORT.id);
-      packer.packShort((short) value);
-    } else if (value instanceof Integer) {
-      packer.packByte(ValueTypes.INTEGER.id);
-      packer.packInt((int) value);
-    } else if (value instanceof Long) {
-      packer.packByte(ValueTypes.LONG.id);
-      packer.packLong((long) value);
-    } else if (value instanceof Float) {
-      packer.packByte(ValueTypes.FLOAT.id);
-      packer.packFloat((float) value);
-    } else if (value instanceof Double) {
-      packer.packByte(ValueTypes.DOUBLE.id);
-      packer.packDouble((double) value);
-    } else if (value instanceof Character) {
-      packer.packByte(ValueTypes.CHARACTER.id);
-      packer.packInt((Character) value);
-    } else if (value instanceof List) {
-      packer.packByte(ValueTypes.ARRAY_OBJECT.id);
-      List list = (List) value;
-      packer.packArrayHeader(list.size());
-      for (Object o : list) packTypedValue(packer, o);
-    } else if (value instanceof Object[]) {
-      packer.packByte(ValueTypes.ARRAY_OBJECT.id);
-      Object[] array = (Object[]) value;
-      packer.packArrayHeader(array.length);
-      for (Object o : array) packTypedValue(packer, o);
-    } else if (value instanceof byte[]) {
-      packer.packByte(ValueTypes.ARRAY_BYTE.id);
-      byte[] array = (byte[]) value;
-      packer.packArrayHeader(array.length);
-      for (byte b : array) packer.packByte(b);
-    } else if (value instanceof short[]) {
-      packer.packByte(ValueTypes.ARRAY_SHORT.id);
-      short[] array = (short[]) value;
-      packer.packArrayHeader(array.length);
-      for (short s : array) packer.packShort(s);
-    } else if (value instanceof int[]) {
-      packer.packByte(ValueTypes.ARRAY_INT.id);
-      int[] array = (int[]) value;
-      packer.packArrayHeader(array.length);
-      for (int i : array) packer.packInt(i);
-    } else if (value instanceof long[]) {
-      packer.packByte(ValueTypes.ARRAY_LONG.id);
-      long[] array = (long[]) value;
-      packer.packArrayHeader(array.length);
-      for (long l : array) packer.packLong(l);
-    } else if (value instanceof float[]) {
-      packer.packByte(ValueTypes.ARRAY_FLOAT.id);
-      float[] array = (float[]) value;
-      packer.packArrayHeader(array.length);
-      for (float f : array) packer.packFloat(f);
-    } else if (value instanceof double[]) {
-      packer.packByte(ValueTypes.ARRAY_DOUBLE.id);
-      double[] array = (double[]) value;
-      packer.packArrayHeader(array.length);
-      for (double d : array) packer.packDouble(d);
-    } else if (value instanceof char[]) {
-      packer.packByte(ValueTypes.ARRAY_CHAR.id);
-      char[] array = (char[]) value;
-      packer.packArrayHeader(array.length);
-      for (char c : array) packer.packInt(c);
-    } else if (value instanceof boolean[]) {
-      packer.packByte(ValueTypes.ARRAY_BOOL.id);
-      boolean[] array = (boolean[]) value;
-      packer.packArrayHeader(array.length);
-      for (boolean b : array) packer.packBoolean(b);
-    } else {
-      String baseMessage = String.format("value of type %s not supported for serialization - ", value.getClass());
-      String extendedMessage =
-        convertPropertyForPersistence == null ?
-        "there is no `convertPropertyForPersistence` function defined, you might want to do so during graph initialisation..." :
-        "there is a `convertPropertyForPersistence`, but it doesn't convert the given type to one of the supported types";
-      String fullMessage = String.format("%s - %s", baseMessage, extendedMessage);
-      throw new UnsupportedOperationException(fullMessage);
-    }
+      switch (value) {
+          case null -> {
+              packer.packByte(ValueTypes.UNKNOWN.id);
+              packer.packNil();
+          }
+          case NodeRef nodeRef -> {
+              packer.packByte(ValueTypes.NODE_REF.id);
+              packer.packLong(nodeRef.id());
+          }
+          case Boolean aBoolean -> {
+              packer.packByte(ValueTypes.BOOLEAN.id);
+              packer.packBoolean(aBoolean);
+          }
+          case String string -> {
+              packer.packByte(ValueTypes.STRING.id);
+              packer.packString(string);
+          }
+          case Byte aByte -> {
+              packer.packByte(ValueTypes.BYTE.id);
+              packer.packByte((byte) value);
+          }
+          case Short aShort -> {
+              packer.packByte(ValueTypes.SHORT.id);
+              packer.packShort((short) value);
+          }
+          case Integer integer -> {
+              packer.packByte(ValueTypes.INTEGER.id);
+              packer.packInt((int) value);
+          }
+          case Long aLong -> {
+              packer.packByte(ValueTypes.LONG.id);
+              packer.packLong((long) value);
+          }
+          case Float f -> {
+              packer.packByte(ValueTypes.FLOAT.id);
+              packer.packFloat((float) value);
+          }
+          case Double d -> {
+              packer.packByte(ValueTypes.DOUBLE.id);
+              packer.packDouble((double) value);
+          }
+          case Character character -> {
+              packer.packByte(ValueTypes.CHARACTER.id);
+              packer.packInt(character);
+          }
+          case List list -> {
+              packer.packByte(ValueTypes.ARRAY_OBJECT.id);
+              packer.packArrayHeader(list.size());
+              for (Object o : list) packTypedValue(packer, o);
+          }
+          case Object[] array -> {
+              packer.packByte(ValueTypes.ARRAY_OBJECT.id);
+              packer.packArrayHeader(array.length);
+              for (Object o : array) packTypedValue(packer, o);
+          }
+          case byte[] array -> {
+              packer.packByte(ValueTypes.ARRAY_BYTE.id);
+              packer.packArrayHeader(array.length);
+              for (byte b : array) packer.packByte(b);
+          }
+          case short[] array -> {
+              packer.packByte(ValueTypes.ARRAY_SHORT.id);
+              packer.packArrayHeader(array.length);
+              for (short s : array) packer.packShort(s);
+          }
+          case int[] array -> {
+              packer.packByte(ValueTypes.ARRAY_INT.id);
+              packer.packArrayHeader(array.length);
+              for (int i : array) packer.packInt(i);
+          }
+          case long[] array -> {
+              packer.packByte(ValueTypes.ARRAY_LONG.id);
+              packer.packArrayHeader(array.length);
+              for (long l : array) packer.packLong(l);
+          }
+          case float[] array -> {
+              packer.packByte(ValueTypes.ARRAY_FLOAT.id);
+              packer.packArrayHeader(array.length);
+              for (float f : array) packer.packFloat(f);
+          }
+          case double[] array -> {
+              packer.packByte(ValueTypes.ARRAY_DOUBLE.id);
+              packer.packArrayHeader(array.length);
+              for (double d : array) packer.packDouble(d);
+          }
+          case char[] array -> {
+              packer.packByte(ValueTypes.ARRAY_CHAR.id);
+              packer.packArrayHeader(array.length);
+              for (char c : array) packer.packInt(c);
+          }
+          case boolean[] array -> {
+              packer.packByte(ValueTypes.ARRAY_BOOL.id);
+              packer.packArrayHeader(array.length);
+              for (boolean b : array) packer.packBoolean(b);
+          }
+          default -> {
+              String fullMessage = getFullMessageString(value);
+              throw new UnsupportedOperationException(fullMessage);
+          }
+      }
   }
+
+    private String getFullMessageString(Object value) {
+        String baseMessage = String.format("value of type %s not supported for serialization - ", value.getClass());
+        String extendedMessage =
+                convertPropertyForPersistence == null ?
+                        "there is no `convertPropertyForPersistence` function defined, you might want to do so during graph initialisation..." :
+                        "there is a `convertPropertyForPersistence`, but it doesn't convert the given type to one of the supported types";
+        return String.format("%s - %s", baseMessage, extendedMessage);
+    }
 }

@@ -2,7 +2,6 @@ package overflowdb.util;
 
 import overflowdb.Node;
 
-import java.util.Iterator;
 import java.util.Map;
 
 public class PropertyHelper {
@@ -15,20 +14,18 @@ public class PropertyHelper {
       Object key = keyValues[i];
       Object value = keyValues[i + 1];
       if (!(key instanceof String))
-        throw new IllegalArgumentException(String.format("The provided key must be of type `String`, but was: %s (value=%s)", key.getClass(), key.toString()));
+        throw new IllegalArgumentException(String.format("The provided key must be of type `String`, but was: %s (value=%s)", key.getClass(), key));
       node.setProperty((String) key, value);
     }
   }
 
-  public static final Object[] toKeyValueArray(Map<String, Object> keyValues) {
+  public static Object[] toKeyValueArray(Map<String, Object> keyValues) {
     final Object[] keyValuesArray = new Object[keyValues.size() * 2];
     int i = 0;
-    final Iterator<Map.Entry<String, Object>> iterator = keyValues.entrySet().iterator();
-    while (iterator.hasNext()) {
-      Map.Entry<String, Object> entry = iterator.next();
-      keyValuesArray[i++] = entry.getKey();
-      keyValuesArray[i++] = entry.getValue();
-    }
+      for (Map.Entry<String, Object> entry : keyValues.entrySet()) {
+          keyValuesArray[i++] = entry.getKey();
+          keyValuesArray[i++] = entry.getValue();
+      }
     return keyValuesArray;
   }
 }

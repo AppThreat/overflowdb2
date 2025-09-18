@@ -276,12 +276,12 @@ class TraversalLogicExt[A](val iterator: Iterator[A]) extends AnyVal:
             case _ =>
                 iterator.flatMap { (a: A) =>
                     val branchOnValue: BranchOn =
-                        on(Iterator.single(a)).nextOption().getOrElse(null)
+                        on(Iterator.single(a)).nextOption().orNull
                     options
                         .applyOrElse(
                           branchOnValue,
                           (failState: BranchOn) =>
-                              ((unused: Traversal[A]) => Iterator.empty[NewEnd])
+                              (unused: Traversal[A]) => Iterator.empty[NewEnd]
                         )
                         .apply(Iterator.single(a))
                 }

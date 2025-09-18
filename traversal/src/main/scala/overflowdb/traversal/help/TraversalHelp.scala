@@ -6,7 +6,7 @@ import overflowdb.traversal.{ElementTraversal, NodeTraversal, help}
 import overflowdb.traversal
 import overflowdb.{NodeDb, NodeRef}
 
-import java.lang.annotation.{Annotation as JAnnotation}
+import java.lang.annotation.Annotation as JAnnotation
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 
@@ -35,7 +35,7 @@ class TraversalHelp(searchPackages: DocSearchPackages):
                 parents ++ parents.flatMap(parentTraitsRecursively)
 
             val relevantClasses     = elementClass +: parentTraitsRecursively(elementClass)
-            val elementSpecificDocs = relevantClasses.map(stepDocsByElementType.get).flatten.flatten
+            val elementSpecificDocs = relevantClasses.flatMap(stepDocsByElementType.get).flatten
 
             if !verbose then elementSpecificDocs
             else if isNode || isNodeRef then
