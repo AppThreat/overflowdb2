@@ -135,21 +135,21 @@ public class OdbStorage implements AutoCloseable {
     return getNodesMVMap().entrySet();
   }
 
-  public synchronized MVMap<Long, byte[]> getNodesMVMap() {
+  public MVMap<Long, byte[]> getNodesMVMap() {
     ensureMVStoreAvailable();
     if (nodesMVMap == null)
       nodesMVMap = mvstore.openMap("nodes");
     return nodesMVMap;
   }
 
-  public synchronized MVMap<String, String> getMetaDataMVMap() {
+  public MVMap<String, String> getMetaDataMVMap() {
     ensureMVStoreAvailable();
     if (metadataMVMap == null)
       metadataMVMap = mvstore.openMap("metadata");
     return metadataMVMap;
   }
 
-  public synchronized MVMap<String, Integer> getStringToIntMappings() {
+  public MVMap<String, Integer> getStringToIntMappings() {
     ensureMVStoreAvailable();
     if (stringToIntMappings == null)
       stringToIntMappings = mvstore.openMap("stringToIntMappings");
@@ -209,7 +209,7 @@ public class OdbStorage implements AutoCloseable {
 
   private MVStore initializeMVStore() {
     MVStore.Builder builder = new MVStore.Builder()
-        .autoCommitBufferSize(1024 * 8)
+        .autoCommitBufferSize(1024 * 64)
         .compress()
         .autoCommitDisabled();
 

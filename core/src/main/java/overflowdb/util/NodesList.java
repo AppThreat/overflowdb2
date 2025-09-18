@@ -223,7 +223,7 @@ public class NodesList {
       return 0;
   }
 
-  public synchronized void persistAll(NodesWriter nodesWriter) {
+  public void persistAll(NodesWriter nodesWriter) {
     nodesWriter.writeAndClearBatched(Arrays.spliterator(nodes), nodes.length);
   }
 

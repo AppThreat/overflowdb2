@@ -93,7 +93,7 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
   }
 
   /** deserialize node from disk, synchronized to ensure this only happens once in a multi-threaded setup */
-  private final synchronized N getSynchronized() throws IOException {
+  private synchronized N getSynchronized() throws IOException {
     final N ref = node;
     /* checking again, in case another thread came here first and deserialized the node from disk */
     if (ref != null) {

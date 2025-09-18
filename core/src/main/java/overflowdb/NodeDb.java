@@ -111,7 +111,7 @@ public abstract class NodeDb extends Node {
 
     for (String propertyKey : propertyKeys()) {
       final Object value = property(propertyKey);
-      /** note: not differentiating `null` and `default value` is a bug - we won't fix it for now, but want to state that as a fact here... */
+      /* note: not differentiating `null` and `default value` is a bug - we won't fix it for now, but want to state that as a fact here... */
       if (value != null && !value.equals(propertyDefaultValue(propertyKey))) results.put(propertyKey, value);
     }
 
@@ -595,7 +595,7 @@ public abstract class NodeDb extends Node {
 
   /* Simplify hoisting of string lookups.
    * n.b. `final` so that the JIT compiler can inline it */
-  public final <A extends Node> scala.collection.Iterator<? extends Object> createAdjacentNodeScalaIteratorByOffSet(int offsetPos) {
+  public final <A extends Node> scala.collection.Iterator<?> createAdjacentNodeScalaIteratorByOffSet(int offsetPos) {
     AdjacentNodes adjacentNodesTmp = this.adjacentNodes;
     if (offsetPos != -1) {
       int start = startIndex(adjacentNodesTmp, offsetPos);
