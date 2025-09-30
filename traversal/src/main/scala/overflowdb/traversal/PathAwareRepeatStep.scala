@@ -21,9 +21,9 @@ object PathAwareRepeatStep:
       behaviour: RepeatBehaviour[A]
     ): A => PathAwareTraversal[A] = (element: A) =>
         new PathAwareTraversal[A](new Iterator[(A, Vector[Any])]:
-            val visited                                   = mutable.Set.empty[A]
-            val emitSack: mutable.Queue[(A, Vector[Any])] = mutable.Queue.empty
-            val worklist: Worklist[WorklistItem[A]] = behaviour.searchAlgorithm match
+            private val visited                                   = mutable.Set.empty[A]
+            private val emitSack: mutable.Queue[(A, Vector[Any])] = mutable.Queue.empty
+            private val worklist: Worklist[WorklistItem[A]] = behaviour.searchAlgorithm match
                 case SearchAlgorithm.DepthFirst   => new LifoWorklist()
                 case SearchAlgorithm.BreadthFirst => new FifoWorklist()
 
@@ -34,60 +34,67 @@ object PathAwareRepeatStep:
 
             def hasNext: Boolean =
                 if emitSack.isEmpty then
-                    // this may add elements to the emit sack and/or modify the worklist
                     traverseOnWorklist()
                 emitSack.nonEmpty || worklistTopHasNext
 
             private def traverseOnWorklist(): Unit =
-                var stop = false
-                while worklist.nonEmpty && !stop do
+                var continue = true
+                while worklist.nonEmpty && continue do
                     val WorklistItem(trav0, depth) = worklist.head
                     val trav = trav0.asInstanceOf[PathAwareTraversal[A]].wrapped
-                    if trav.isEmpty then worklist.removeHead()
-                    else if behaviour.maxDepthReached(depth) then stop = true
+                    if trav.isEmpty then
+                        worklist.removeHead()
+                    else if behaviour.maxDepthReached(depth) then
+                        continue = false
                     else
-                        val (element, path1) = trav.next()
-                        if behaviour.dedupEnabled then visited.addOne(element)
+                        val (currentElement, currentPath) = trav.next()
+                        if behaviour.dedupEnabled then visited.addOne(currentElement)
 
-                        if // `while/repeat` behaviour, i.e. check every time
-                            behaviour.whileConditionIsDefinedAndEmpty(element) ||
-                            // `repeat/until` behaviour, i.e. only checking the `until` condition from depth 1
-                            (depth > 0 && behaviour.untilConditionReached(element))
-                        then
+                        val shouldStop =
+                            // `while/repeat` behaviour, i.e. check every time
+                            behaviour.whileConditionIsDefinedAndEmpty(currentElement) ||
+                                // `repeat/until` behaviour, i.e. only checking the `until` condition from depth 1
+                                (depth > 0 && behaviour.untilConditionReached(currentElement))
+
+                        if shouldStop then
                             // we just consumed an element from the traversal, so in lieu adding to the emit sack
-                            emitSack.enqueue((element, path1))
-                            stop = true
+                            emitSack.enqueue((currentElement, currentPath))
+                            continue = false
                         else
                             val nextLevelTraversal =
                                 val repeat =
                                     repeatTraversal(new PathAwareTraversal(Iterator.single((
-                                      element,
-                                      path1
+                                      currentElement,
+                                      currentPath
                                     ))))
                                 if behaviour.dedupEnabled then repeat.filterNot(visited.contains)
                                 else repeat
                             worklist.addItem(WorklistItem(nextLevelTraversal, depth + 1))
 
-                            if behaviour.shouldEmit(element, depth) then
-                                emitSack.enqueue((element, path1))
+                            if behaviour.shouldEmit(currentElement, depth) then
+                                emitSack.enqueue((currentElement, currentPath))
 
                             if emitSack.nonEmpty then
-                                stop = true
+                                continue = false
                         end if
                     end if
                 end while
             end traverseOnWorklist
 
-            private def worklistTopHasNext: Boolean =
+            private inline def worklistTopHasNext: Boolean =
                 worklist.nonEmpty && worklist.head.traversal.hasNext
 
             override def next(): (A, Vector[Any]) =
                 val result =
-                    if emitSack.nonEmpty then emitSack.dequeue()
+                    if emitSack.nonEmpty then
+                        emitSack.dequeue()
                     else if worklistTopHasNext then
                         worklist.head.traversal.asInstanceOf[PathAwareTraversal[A]].wrapped.next()
-                    else throw new NoSuchElementException("next on empty iterator")
-                if behaviour.dedupEnabled then visited.addOne(result._1)
+                    else
+                        throw new NoSuchElementException("next on empty iterator")
+
+                if behaviour.dedupEnabled then
+                    visited.addOne(result._1)
                 result
         )
 end PathAwareRepeatStep

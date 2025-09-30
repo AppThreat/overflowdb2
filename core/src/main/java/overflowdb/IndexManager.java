@@ -58,14 +58,14 @@ public final class IndexManager {
           .forEach(nodeId -> put(propertyName, entry.getKey(), (NodeRef) graph.node(nodeId))));
   }
 
-  public void putIfIndexed(final String key, final Object newValue, final NodeRef nodeRef) {
+  public void putIfIndexed(final String key, final Object newValue, final NodeRef<?> nodeRef) {
     if (indexes.containsKey(key)) {
       dirtyFlags.put(key, true);
       put(key, newValue, nodeRef);
     }
   }
 
-  private void put(final String key, final Object value, final NodeRef nodeRef) {
+  private void put(final String key, final Object value, final NodeRef<?> nodeRef) {
     Map<Object, Set<NodeRef>> keyMap = indexes.get(key);
     if (null == keyMap) {
       indexes.putIfAbsent(key, new ConcurrentHashMap<>());
@@ -114,7 +114,7 @@ public final class IndexManager {
     }
   }
 
-  void remove(final String key, final Object value, final NodeRef nodeRef) {
+  void remove(final String key, final Object value, final NodeRef<?> nodeRef) {
     dirtyFlags.put(key, true);
     final Map<Object, Set<NodeRef>> keyMap = indexes.get(key);
     if (null != keyMap) {
@@ -128,7 +128,7 @@ public final class IndexManager {
     }
   }
 
-  void removeElement(final NodeRef nodeRef) {
+  void removeElement(final NodeRef<?> nodeRef) {
     for (String propertyName : indexes.keySet())
       dirtyFlags.put(propertyName, true);
     for (Map<Object, Set<NodeRef>> map : indexes.values()) {

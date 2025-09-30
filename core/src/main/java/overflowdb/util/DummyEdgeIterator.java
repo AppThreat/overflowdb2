@@ -15,7 +15,7 @@ public class DummyEdgeIterator implements Iterator<Edge> {
   private final int strideSize;
   private final Direction direction;
   private final String label;
-  private final NodeRef thisRef;
+  private final NodeRef<?> thisRef;
 
   /**
    * Used for peeking forward, and also handle a benign race condition: the given `array` can be modified from the
@@ -26,7 +26,7 @@ public class DummyEdgeIterator implements Iterator<Edge> {
   private Edge nextCached;
 
   public DummyEdgeIterator(Object[] array, int begin, int exclusiveEnd, int strideSize,
-                           Direction direction, String label, NodeRef thisRef) {
+                           Direction direction, String label, NodeRef<?> thisRef) {
     this.array = array;
     this.begin = begin;
     this.current = begin;
@@ -62,7 +62,7 @@ public class DummyEdgeIterator implements Iterator<Edge> {
   }
 
   private Edge readNext() {
-    NodeRef otherRef = (NodeRef) array[current];
+    NodeRef<?> otherRef = (NodeRef) array[current];
     Edge dummyEdge;
     if (direction == Direction.OUT) {
       dummyEdge = thisRef.get().instantiateDummyEdge(label, thisRef, otherRef);

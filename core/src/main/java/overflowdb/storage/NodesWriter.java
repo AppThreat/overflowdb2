@@ -13,13 +13,13 @@ import java.util.stream.StreamSupport;
  * or alternatively when closing the graph (if storage to disk is enabled).
  */
 public class NodesWriter {
-  private final NodeSerializer nodeSerializer;
-  private final OdbStorage storage;
+    private final NodeSerializer nodeSerializer;
+    private final OdbStorage storage;
 
-  public NodesWriter(NodeSerializer nodeSerializer, OdbStorage storage) {
-    this.nodeSerializer = nodeSerializer;
-    this.storage = storage;
-  }
+    public NodesWriter(NodeSerializer nodeSerializer, OdbStorage storage) {
+        this.nodeSerializer = nodeSerializer;
+        this.storage = storage;
+    }
 
   /**
    * Writes all references to storage, blocks until complete.
@@ -37,7 +37,7 @@ public class NodesWriter {
   }
   private SerializedNode serializeIfDirty(Node node) {
     NodeDb nodeDb = null;
-    NodeRef ref = null;
+    NodeRef<?> ref = null;
     if (node instanceof NodeDb) {
       nodeDb = (NodeDb) node;
       ref = nodeDb.ref;
@@ -46,26 +46,26 @@ public class NodesWriter {
       if (ref.isSet()) nodeDb = ref.get();
     }
 
-    if (nodeDb != null && nodeDb.isDirty()) {
-      try {
-        byte[] data = nodeSerializer.serialize(nodeDb);
-        NodeRef.clear(ref);
-        return new SerializedNode(ref.id(), data);
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+        if (nodeDb != null && nodeDb.isDirty()) {
+            try {
+                byte[] data = nodeSerializer.serialize(nodeDb);
+                NodeRef.clear(ref);
+                return new SerializedNode(ref.id(), data);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return null;
     }
-    return null;
-  }
 
-  private static class SerializedNode {
-    private final long id;
-    private final byte[] data;
+    private static class SerializedNode {
+        private final long id;
+        private final byte[] data;
 
-    private SerializedNode(long id, byte[] data) {
-      this.id = id;
-      this.data = data;
+        private SerializedNode(long id, byte[] data) {
+            this.id = id;
+            this.data = data;
+        }
     }
-  }
 
 }
