@@ -14,8 +14,8 @@ public class Config {
     private FileSystemType fileSystemType = FileSystemType.DEFAULT;
     private static Optional<Integer> compressionRatio = Optional.empty();
     private static final int defaultCompressionRatio = 20;
-    private static final int defaultCacheSize = 1024; // In MB
-    private static final int defaultPageSplitSize = 16 * 1024; // In KB
+    private static final int defaultCacheSize = 128 * 1024; // 128 MB
+    private static final int defaultPageSplitSize = 64 * 1024; // 64 KB
     private Optional<Integer> cacheSize = Optional.empty();
     private Optional<Integer> pageSplitSize = Optional.empty();
 

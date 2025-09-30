@@ -25,6 +25,8 @@ public class OdbStorage implements AutoCloseable {
     public static final String METADATA_KEY_LIBRARY_VERSIONS_MAX_ID = "LIBRARY_VERSIONS_MAX_ID";
     public static final String METADATA_PREFIX_LIBRARY_VERSIONS = "LIBRARY_VERSIONS_ENTRY_";
     private static final String INDEX_PREFIX = "index_";
+    public static final int DEFAULT_COMPACT_FILL_RATE = 50; // In percent
+    public static final int DEFAULT_COMMIT_BUFFER_SIZE = 1024 * 64; // 64 MB
 
 
     private final File mvstoreFile;
@@ -224,8 +226,8 @@ public class OdbStorage implements AutoCloseable {
     private MVStore initializeMVStore() {
         MVStore.Builder builder = new MVStore.Builder()
                 .compressHigh()
-                .autoCompactFillRate(50)
-                .autoCommitBufferSize(1024 * 64);
+                .autoCompactFillRate(DEFAULT_COMPACT_FILL_RATE)
+                .autoCommitBufferSize(DEFAULT_COMMIT_BUFFER_SIZE);
         if (config.getCacheSize().isPresent()) {
             builder.cacheSize(config.getCacheSize().get());
         }
