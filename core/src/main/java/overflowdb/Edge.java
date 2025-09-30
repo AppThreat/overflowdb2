@@ -10,8 +10,8 @@ import overflowdb.util.IteratorUtils;
 public abstract class Edge extends Element {
   private final Graph graph;
   private final String label;
-  private final NodeRef outNode;
-  private final NodeRef inNode;
+  private final NodeRef<?> outNode;
+  private final NodeRef<?> inNode;
 
   /* When storing the inVertex in the outVertex' adjacent node array, there may be multiple edges
    * with the same (direction, label), i.e. they are stored in the same block. To be able to
@@ -32,8 +32,8 @@ public abstract class Edge extends Element {
 
   public Edge(Graph graph,
               String label,
-              NodeRef outNode,
-              NodeRef inVertex,
+              NodeRef<?> outNode,
+              NodeRef<?> inVertex,
               Set<String> specificKeys) {
     this.graph = graph;
     this.label = label;
@@ -44,15 +44,15 @@ public abstract class Edge extends Element {
     graph.applyBackpressureMaybe();
   }
 
-  public NodeRef outNode() {
+  public NodeRef<?> outNode() {
     return outNode;
   }
 
-  public NodeRef inNode() {
+  public NodeRef<?> inNode() {
     return inNode;
   }
 
-  public Iterator<NodeRef> bothNodes() {
+  public Iterator<NodeRef<?>> bothNodes() {
     return IteratorUtils.from(outNode, inNode);
   }
 

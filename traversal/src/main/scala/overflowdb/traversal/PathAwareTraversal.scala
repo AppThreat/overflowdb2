@@ -31,23 +31,24 @@ class PathAwareTraversal[A](val wrapped: Iterator[(A, Vector[Any])]) extends Ite
     override def collect[B](pf: PartialFunction[A, B]): PathAwareTraversal[B] = flatMap(pf.lift)
 
     override def filter(p: A => Boolean): PathAwareTraversal[A] =
-        new PathAwareTraversal(wrapped.filter(ap => p(ap._1)))
+        new PathAwareTraversal(wrapped.filter { case (a, _) => p(a) })
 
-    override def filterNot(p: A => Boolean): PathAwareTraversal[A] = new PathAwareTraversal(
-      wrapped.filterNot(ap => p(ap._1))
-    )
+    override def filterNot(p: A => Boolean): PathAwareTraversal[A] =
+        new PathAwareTraversal(wrapped.filterNot { case (a, _) => p(a) })
 
     override def duplicate: (Iterator[A], Iterator[A]) =
-        val tmp = wrapped.duplicate
-        (new PathAwareTraversal(tmp._1), new PathAwareTraversal(tmp._2))
+        val (iter1, iter2) = wrapped.duplicate
+        (new PathAwareTraversal(iter1), new PathAwareTraversal(iter2))
 
     private[traversal] def _union[B](traversals: (Traversal[A] => Traversal[B])*): Traversal[B] =
         new PathAwareTraversal(wrapped.flatMap { case (a, p) =>
             traversals.iterator.flatMap { inner =>
-                inner(new PathAwareTraversal(Iterator.single((a, p)))) match
-                    case stillPathAware: PathAwareTraversal[B] => stillPathAware.wrapped
-                    // do we really want to allow the following, or is it an error?
-                    case notPathAware => notPathAware.iterator.map { (b: B) => (b, p.appended(a)) }
+                val result = inner(new PathAwareTraversal(Iterator.single((a, p))))
+                result match
+                    case stillPathAware: PathAwareTraversal[?] =>
+                        stillPathAware.asInstanceOf[PathAwareTraversal[B]].wrapped
+                    case notPathAware =>
+                        notPathAware.iterator.map { (b: B) => (b, p.appended(a)) }
             }
         })
 
@@ -58,15 +59,18 @@ class PathAwareTraversal[A](val wrapped: Iterator[(A, Vector[Any])]) extends Ite
     ): Traversal[NewEnd] =
         new PathAwareTraversal(wrapped.flatMap { case (a, p) =>
             val branchOnValue: BranchOn = on(Iterator.single(a)).nextOption().orNull
-            options
+            val traversal = options
                 .applyOrElse(
                   branchOnValue,
                   (failState: BranchOn) => (unused: Traversal[A]) => Iterator.empty[NewEnd]
                 )
-                .apply(new PathAwareTraversal(Iterator.single((a, p)))) match
-                case stillPathAware: PathAwareTraversal[NewEnd] => stillPathAware.wrapped
-                // do we really want to allow the following, or is it an error?
-                case notPathAware => notPathAware.iterator.map { (b: NewEnd) => (b, p.appended(a)) }
+                .apply(new PathAwareTraversal(Iterator.single((a, p))))
+
+            traversal match
+                case stillPathAware: PathAwareTraversal[?] =>
+                    stillPathAware.asInstanceOf[PathAwareTraversal[NewEnd]].wrapped
+                case notPathAware =>
+                    notPathAware.iterator.map { (b: NewEnd) => (b, p.appended(a)) }
         })
 
     private[traversal] def _coalesce[NewEnd](options: (Traversal[A] => Traversal[NewEnd])*)
@@ -74,14 +78,14 @@ class PathAwareTraversal[A](val wrapped: Iterator[(A, Vector[Any])]) extends Ite
         new PathAwareTraversal(wrapped.flatMap { case (a, p) =>
             options.iterator
                 .map { inner =>
-                    inner(new PathAwareTraversal(Iterator.single((a, p)))) match
-                        case stillPathAware: PathAwareTraversal[NewEnd] => stillPathAware.wrapped
-                        // do we really want to allow the following, or is it an error?
-                        case notPathAware => notPathAware.iterator.map { (b: NewEnd) =>
-                                (b, p.appended(a))
-                            }
+                    val result = inner(new PathAwareTraversal(Iterator.single((a, p))))
+                    result match
+                        case stillPathAware: PathAwareTraversal[?] =>
+                            stillPathAware.asInstanceOf[PathAwareTraversal[NewEnd]].wrapped
+                        case notPathAware =>
+                            notPathAware.iterator.map { (b: NewEnd) => (b, p.appended(a)) }
                 }
-                .find(_.nonEmpty)
+                .find(_.hasNext)
                 .getOrElse(Iterator.empty)
         })
 

@@ -17,38 +17,41 @@ import java.util.Set;
 import java.util.function.Function;
 
 public class NodeSerializer extends BookKeeper {
-  private final OdbStorage storage;
-  private final Function<Object, Object> convertPropertyForPersistence;
+    private final OdbStorage storage;
+    private final Function<Object, Object> convertPropertyForPersistence;
+    private final ThreadLocal<MessageBufferPacker> packerPool = ThreadLocal.withInitial(MessagePack::newDefaultBufferPacker);
 
-  public NodeSerializer(boolean statsEnabled, OdbStorage storage, Function<Object, Object> convertPropertyForPersistence) {
-    super(statsEnabled);
-    this.storage = storage;
-    this.convertPropertyForPersistence = convertPropertyForPersistence;
-  }
-
-  public NodeSerializer(boolean statsEnabled, OdbStorage storage) {
-    this(statsEnabled, storage, null);
-  }
-
-  public byte[] serialize(NodeDb node) throws IOException {
-    long startTimeNanos = getStartTimeNanos();
-    try (MessageBufferPacker packer = MessagePack.newDefaultBufferPacker()) {
-      NodeLayoutInformation layoutInformation = node.layoutInformation();
-      /* marking as clean *before* we start serializing - if node is modified any time afterwards it'll be marked as dirty */
-      node.markAsClean();
-
-      packer.packLong(node.ref.id());
-
-      final int labelId = storage.lookupOrCreateStringToIntMapping(layoutInformation.label);
-      packer.packInt(labelId);
-
-      packProperties(packer, node.propertiesMapForStorage());
-      packEdges(packer, node);
-
-      if (statsEnabled) recordStatistics(startTimeNanos);
-      return packer.toByteArray();
+    public NodeSerializer(boolean statsEnabled, OdbStorage storage, Function<Object, Object> convertPropertyForPersistence) {
+        super(statsEnabled);
+        this.storage = storage;
+        this.convertPropertyForPersistence = convertPropertyForPersistence;
     }
-  }
+
+    public NodeSerializer(boolean statsEnabled, OdbStorage storage) {
+        this(statsEnabled, storage, null);
+    }
+
+    public byte[] serialize(NodeDb node) throws IOException {
+        long startTimeNanos = getStartTimeNanos();
+        MessageBufferPacker packer = packerPool.get();
+        try (packer) {
+            packer.clear();
+            NodeLayoutInformation layoutInformation = node.layoutInformation();
+            /* marking as clean *before* we start serializing - if node is modified any time afterwards it'll be marked as dirty */
+            node.markAsClean();
+
+            packer.packLong(node.ref.id());
+
+            final int labelId = storage.lookupOrCreateStringToIntMapping(layoutInformation.label);
+            packer.packInt(labelId);
+
+            packProperties(packer, node.propertiesMapForStorage());
+            packEdges(packer, node);
+
+            if (statsEnabled) recordStatistics(startTimeNanos);
+            return packer.toByteArray();
+        }
+    }
 
   /**
    * when deserializing, msgpack can't differentiate between e.g. int and long, so we need to encode the type as well - doing that with an array
@@ -65,80 +68,80 @@ public class NodeSerializer extends BookKeeper {
     }
   }
 
-  private void packEdges(MessageBufferPacker packer, NodeDb node) throws IOException {
-    NodeLayoutInformation layoutInformation = node.layoutInformation();
+    private void packEdges(MessageBufferPacker packer, NodeDb node) throws IOException {
+        NodeLayoutInformation layoutInformation = node.layoutInformation();
 
-    packEdgesForOneDirection(packer, node, node.getAdjacentNodes(), layoutInformation.allowedOutEdgeLabels(), layoutInformation::outEdgeToOffsetPosition);
-    packEdgesForOneDirection(packer, node, node.getAdjacentNodes(), layoutInformation.allowedInEdgeLabels(), layoutInformation::inEdgeToOffsetPosition);
-  }
-
-  private void packEdgesForOneDirection(MessageBufferPacker packer, NodeDb node, AdjacentNodes adjacentNodes,
-                                        String[] allowedEdgeLabels, Function<String, Integer> edgeToOffsetPosition) throws IOException {
-    // first prepare everything we want to write, so that we can prepend it with the length - helps during deserialization
-    ArrayList<Object> edgeLabelAndOffsetPos = new ArrayList<>(allowedEdgeLabels.length * 2);
-    int edgeTypeCount = 0;
-    for (String edgeLabel : allowedEdgeLabels) {
-      int offsetPos = edgeToOffsetPosition.apply(edgeLabel);
-      int count = adjacentNodes.getOffset(offsetPos * 2 + 1);
-      if (count > 0) {
-        edgeTypeCount++;
-        edgeLabelAndOffsetPos.add(edgeLabel);
-        edgeLabelAndOffsetPos.add(offsetPos);
-      }
+        packEdgesForOneDirection(packer, node, node.getAdjacentNodes(), layoutInformation.allowedOutEdgeLabels(), layoutInformation::outEdgeToOffsetPosition);
+        packEdgesForOneDirection(packer, node, node.getAdjacentNodes(), layoutInformation.allowedInEdgeLabels(), layoutInformation::inEdgeToOffsetPosition);
     }
-    packer.packInt(edgeTypeCount);
-    for (int i = 0; i < edgeLabelAndOffsetPos.size(); i += 2) {
-      String edgeLabel = (String) edgeLabelAndOffsetPos.get(i);
-      int offsetPos = (int) edgeLabelAndOffsetPos.get(i + 1);
-      packEdgesForOneLabel(packer, node, adjacentNodes, edgeLabel, offsetPos);
-    }
-  }
 
-  private void packEdgesForOneLabel(MessageBufferPacker packer, NodeDb node, AdjacentNodes adjacentNodes, String edgeLabel, int offsetPos) throws IOException {
-    NodeLayoutInformation layoutInformation = node.layoutInformation();
-    Object[] adjacentNodesWithEdgeProperties = adjacentNodes.nodesWithEdgeProperties;
-    final Set<String> edgePropertyNames = layoutInformation.edgePropertyKeys(edgeLabel);
-
-    // pointers into adjacentNodesWithEdgeProperties
-    int start = node.startIndex(adjacentNodes, offsetPos);
-    int blockLength = node.blockLength(adjacentNodes, offsetPos);
-    int strideSize = node.getStrideSize(edgeLabel);
-
-    // first prepare all edges to get total count, then first write the count and then the edges
-    ArrayList<Object> adjacentNodeIdsAndProperties = new ArrayList<>(blockLength / strideSize);
-    int edgeCount = 0;
-    int currIdx = start;
-    int endIdx = start + blockLength;
-    while (currIdx < endIdx) {
-      Node adjacentNode = (Node) adjacentNodesWithEdgeProperties[currIdx];
-      if (adjacentNode != null) {
-        edgeCount++;
-        adjacentNodeIdsAndProperties.add(adjacentNode.id());
-
-        Map<String, Object> edgeProperties = new HashMap<>();
-        for (String propertyName : edgePropertyNames) {
-          int edgePropertyOffset = layoutInformation.getEdgePropertyOffsetRelativeToAdjacentNodeRef(edgeLabel, propertyName);
-          Object property = adjacentNodesWithEdgeProperties[currIdx + edgePropertyOffset];
-          if (property != null) {
-            edgeProperties.put(propertyName, property);
-          }
+    private void packEdgesForOneDirection(MessageBufferPacker packer, NodeDb node, AdjacentNodes adjacentNodes,
+                                          String[] allowedEdgeLabels, Function<String, Integer> edgeToOffsetPosition) throws IOException {
+        // first prepare everything we want to write, so that we can prepend it with the length - helps during deserialization
+        ArrayList<Object> edgeLabelAndOffsetPos = new ArrayList<>(allowedEdgeLabels.length * 2);
+        int edgeTypeCount = 0;
+        for (String edgeLabel : allowedEdgeLabels) {
+            int offsetPos = edgeToOffsetPosition.apply(edgeLabel);
+            int count = adjacentNodes.getOffset(offsetPos * 2 + 1);
+            if (count > 0) {
+                edgeTypeCount++;
+                edgeLabelAndOffsetPos.add(edgeLabel);
+                edgeLabelAndOffsetPos.add(offsetPos);
+            }
         }
-        adjacentNodeIdsAndProperties.add(edgeProperties);
-      }
-      currIdx += strideSize;
+        packer.packInt(edgeTypeCount);
+        for (int i = 0; i < edgeLabelAndOffsetPos.size(); i += 2) {
+            String edgeLabel = (String) edgeLabelAndOffsetPos.get(i);
+            int offsetPos = (int) edgeLabelAndOffsetPos.get(i + 1);
+            packEdgesForOneLabel(packer, node, adjacentNodes, edgeLabel, offsetPos);
+        }
     }
 
-    int labelId = storage.lookupOrCreateStringToIntMapping(edgeLabel);
-    packer.packInt(labelId);
-    packer.packInt(edgeCount);
+    private void packEdgesForOneLabel(MessageBufferPacker packer, NodeDb node, AdjacentNodes adjacentNodes, String edgeLabel, int offsetPos) throws IOException {
+        NodeLayoutInformation layoutInformation = node.layoutInformation();
+        Object[] adjacentNodesWithEdgeProperties = adjacentNodes.nodesWithEdgeProperties;
+        final Set<String> edgePropertyNames = layoutInformation.edgePropertyKeys(edgeLabel);
 
-    for (int edgeIdx = 0; edgeIdx < edgeCount; edgeIdx++) {
-      long adjacentNodeId = (long) adjacentNodeIdsAndProperties.get(edgeIdx * 2);
-      packer.packLong(adjacentNodeId);
-      Map<String, Object> edgeProperties = (Map<String, Object>) adjacentNodeIdsAndProperties.get(edgeIdx * 2 + 1);
-      packProperties(packer, edgeProperties);
+        // first prepare all edges to get total count, then first write the count and then the edges
+        ArrayList<Object> adjacentNodeIdsAndProperties = new ArrayList<>(edgePropertyNames.size() * 2);
+        int edgeCount = 0;
+        // pointers into adjacentNodesWithEdgeProperties
+        int start = node.startIndex(adjacentNodes, offsetPos);
+        int blockLength = node.blockLength(adjacentNodes, offsetPos);
+        int strideSize = node.getStrideSize(edgeLabel);
+
+        int currIdx = start;
+        int endIdx = start + blockLength;
+        while (currIdx < endIdx) {
+            Node adjacentNode = (Node) adjacentNodesWithEdgeProperties[currIdx];
+            if (adjacentNode != null) {
+                edgeCount++;
+                adjacentNodeIdsAndProperties.add(adjacentNode.id());
+
+                Map<String, Object> edgeProperties = new HashMap<>(edgePropertyNames.size());
+                for (String propertyName : edgePropertyNames) {
+                    int edgePropertyOffset = layoutInformation.getEdgePropertyOffsetRelativeToAdjacentNodeRef(edgeLabel, propertyName);
+                    Object property = adjacentNodesWithEdgeProperties[currIdx + edgePropertyOffset];
+                    if (property != null) {
+                        edgeProperties.put(propertyName, property);
+                    }
+                }
+                adjacentNodeIdsAndProperties.add(edgeProperties);
+            }
+            currIdx += strideSize;
+        }
+
+        int labelId = storage.lookupOrCreateStringToIntMapping(edgeLabel);
+        packer.packInt(labelId);
+        packer.packInt(edgeCount);
+
+        for (int edgeIdx = 0; edgeIdx < edgeCount; edgeIdx++) {
+            long adjacentNodeId = (long) adjacentNodeIdsAndProperties.get(edgeIdx * 2);
+            packer.packLong(adjacentNodeId);
+            Map<String, Object> edgeProperties = (Map<String, Object>) adjacentNodeIdsAndProperties.get(edgeIdx * 2 + 1);
+            packProperties(packer, edgeProperties);
+        }
     }
-  }
 
   /**
    * format: `[ValueType.id, value]`
@@ -150,7 +153,7 @@ public class NodeSerializer extends BookKeeper {
               packer.packByte(ValueTypes.UNKNOWN.id);
               packer.packNil();
           }
-          case NodeRef nodeRef -> {
+          case NodeRef<?> nodeRef -> {
               packer.packByte(ValueTypes.NODE_REF.id);
               packer.packLong(nodeRef.id());
           }

@@ -94,7 +94,7 @@ public class ReferenceManager implements AutoCloseable {
       if (clearableRefs.isEmpty()) {
         break;
       }
-      final NodeRef ref = clearableRefs.removeFirst();
+      final NodeRef<?> ref = clearableRefs.removeFirst();
       if (ref != null) {
         refsToClear.add(ref);
       }

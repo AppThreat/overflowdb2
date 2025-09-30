@@ -21,7 +21,7 @@ import java.util.*;
  * Read operations are not locked, i.e. they are fast because they do not wait, but they may read outdated data.
  */
 public abstract class NodeDb extends Node {
-  public final NodeRef ref;
+  public final NodeRef<?> ref;
 
   /**
    * Using separate volatile container for the large array (adjacentNodesWithEdgeProperties) and the small
@@ -291,8 +291,8 @@ public abstract class NodeDb extends Node {
 
   @Override
   protected Edge addEdgeImpl(String label, Node inNode, Object... keyValues) {
-    final NodeRef inNodeRef = (NodeRef) inNode;
-    NodeRef thisNodeRef = ref;
+    final NodeRef<?> inNodeRef = (NodeRef) inNode;
+    NodeRef<?> thisNodeRef = ref;
 
     int outBlockOffset = storeAdjacentNode(Direction.OUT, label, inNodeRef, keyValues);
     int inBlockOffset = inNodeRef.get().storeAdjacentNode(Direction.IN, label, thisNodeRef, keyValues);
@@ -311,7 +311,7 @@ public abstract class NodeDb extends Node {
 
   @Override
   protected void addEdgeSilentImpl(String label, Node inNode, Object... keyValues) {
-    final NodeRef inNodeRef = (NodeRef) inNode;
+    final NodeRef<?> inNodeRef = (NodeRef) inNode;
 
       storeAdjacentNode(Direction.OUT, label, inNodeRef, keyValues);
     inNodeRef.get().storeAdjacentNode(Direction.IN, label, ref, keyValues);
@@ -450,7 +450,7 @@ public abstract class NodeDb extends Node {
    */
   protected final int blockOffsetToOccurrence(Direction direction,
                                               String label,
-                                              NodeRef otherNode,
+                                              NodeRef<?> otherNode,
                                               int blockOffset) {
     AdjacentNodes adjacentNodesTmp = this.adjacentNodes;
     int offsetPos = getPositionInEdgeOffsets(direction, label);
@@ -460,7 +460,7 @@ public abstract class NodeDb extends Node {
 
     int occurrenceCount = -1;
     for (int i = start; i <= start + blockOffset; i += strideSize) {
-      final NodeRef adjacentNodeWithProperty = (NodeRef) adjacentNodesWithEdgeProperties[i];
+      final NodeRef<?> adjacentNodeWithProperty = (NodeRef) adjacentNodesWithEdgeProperties[i];
       if (adjacentNodeWithProperty != null &&
           adjacentNodeWithProperty.id() == otherNode.id()) {
         occurrenceCount++;
@@ -483,7 +483,7 @@ public abstract class NodeDb extends Node {
    */
   protected final int occurrenceToBlockOffset(Direction direction,
                                               String label,
-                                              NodeRef adjacentNode,
+                                              NodeRef<?> adjacentNode,
                                               int occurrence) {
     AdjacentNodes adjacentNodesTmp = this.adjacentNodes;
     int offsetPos = getPositionInEdgeOffsets(direction, label);
@@ -495,7 +495,7 @@ public abstract class NodeDb extends Node {
     int currentOccurrence = 0;
     int exclusiveEnd = start + length;
     for (int i = start; i < exclusiveEnd; i += strideSize) {
-      final NodeRef adjacentNodeWithProperty = (NodeRef) adjacentNodesWithEdgeProperties[i];
+      final NodeRef<?> adjacentNodeWithProperty = (NodeRef) adjacentNodesWithEdgeProperties[i];
       if (adjacentNodeWithProperty != null &&
           adjacentNodeWithProperty.id() == adjacentNode.id()) {
         if (currentOccurrence == occurrence) {
@@ -617,7 +617,7 @@ public abstract class NodeDb extends Node {
 
   public synchronized int storeAdjacentNode(Direction direction,
                                 String edgeLabel,
-                                NodeRef adjacentNode,
+                                NodeRef<?> adjacentNode,
                                 Object... edgeKeyValues) {
     int blockOffset = storeAdjacentNode(direction, edgeLabel, adjacentNode);
 
@@ -635,7 +635,7 @@ public abstract class NodeDb extends Node {
   }
 
   //implicitly synchronized -- caller already holds monitor
-  private int storeAdjacentNode(Direction direction, String edgeLabel, NodeRef nodeRef) {
+  private int storeAdjacentNode(Direction direction, String edgeLabel, NodeRef<?> nodeRef) {
     AdjacentNodes tmp = this.adjacentNodes; //load acquire
     int offsetPos = getPositionInEdgeOffsets(direction, edgeLabel);
     if (offsetPos == -1) {
@@ -728,7 +728,7 @@ public abstract class NodeDb extends Node {
   /**
    * instantiate and return a dummy edge, which doesn't really exist in the graph
    */
-  public final Edge instantiateDummyEdge(String label, NodeRef outNode, NodeRef inNode) {
+  public final Edge instantiateDummyEdge(String label, NodeRef<?> outNode, NodeRef<?> inNode) {
     final EdgeFactory edgeFactory = ref.graph.edgeFactoryByLabel.get(label);
     if (edgeFactory == null)
       throw new IllegalArgumentException("specializedEdgeFactory for label=" + label + " not found - please register on startup!");

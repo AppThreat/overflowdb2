@@ -62,7 +62,7 @@ public class BatchedUpdate {
 
         @Override
         public Iterator<Change> iterator() {
-            return new IteratorUtils.ArrayIterator(changes);
+            return new IteratorUtils.ArrayIterator<>(changes);
         }
 
     }
