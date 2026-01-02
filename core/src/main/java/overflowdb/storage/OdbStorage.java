@@ -7,11 +7,7 @@ import overflowdb.util.StringInterner;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -36,9 +32,9 @@ public class OdbStorage implements AutoCloseable {
     private MVMap<Long, byte[]> nodesMVMap;
     private MVMap<String, String> metadataMVMap;
     private MVMap<String, Integer> stringToIntMappings;
+    private MVMap<Integer, String> intToStringMappings;
     private boolean closed;
     private final AtomicInteger stringToIntMappingsMaxId = new AtomicInteger(0);
-    private ArrayList<String> stringToIntReverseMappings;
     private int libraryVersionsIdCurrentRun;
 
     public static OdbStorage createWithTempFile(StringInterner stringInterner) {
@@ -167,36 +163,30 @@ public class OdbStorage implements AutoCloseable {
 
     public MVMap<String, Integer> getStringToIntMappings() {
         ensureMVStoreAvailable();
-        if (stringToIntMappings == null)
+        if (stringToIntMappings == null) {
             stringToIntMappings = mvstore.openMap("stringToIntMappings");
-
-        if (stringToIntReverseMappings == null) {
-            int mappingsCount = stringToIntMappings.size();
-            stringToIntReverseMappings = new ArrayList<>(mappingsCount);
-            stringToIntMappings.forEach((string, id) -> {
-                ensureCapacity(stringToIntReverseMappings, id + 1);
-                stringToIntReverseMappings.set(id, string);
-            });
         }
-
         return stringToIntMappings;
     }
 
+    private MVMap<Integer, String> getIntToStringMappings() {
+        ensureMVStoreAvailable();
+        if (intToStringMappings == null)
+            intToStringMappings = mvstore.openMap("intToStringMappings");
+        return intToStringMappings;
+    }
+
     public int lookupOrCreateStringToIntMapping(String s) {
+        String interned = stringInterner.intern(s);
         final MVMap<String, Integer> mappings = getStringToIntMappings();
-        if (mappings.containsKey(s)) {
-            return mappings.get(s);
-        } else {
-            return createStringToIntMapping(s);
-        }
+        Integer existing = mappings.get(interned);
+        return Objects.requireNonNullElseGet(existing, () -> createStringToIntMapping(interned));
     }
 
     private int createStringToIntMapping(String s) {
         final int index = stringToIntMappingsMaxId.incrementAndGet();
         getStringToIntMappings().put(s, index);
-
-        ensureCapacity(stringToIntReverseMappings, index + 1);
-        stringToIntReverseMappings.set(index, s);
+        getIntToStringMappings().put(index, s);
         return index;
     }
 
@@ -210,9 +200,9 @@ public class OdbStorage implements AutoCloseable {
     }
 
     public String reverseLookupStringToIntMapping(int stringId) {
-        getStringToIntMappings(); //ensure everything is initialized
-        String string = stringToIntReverseMappings.get(stringId);
-        return stringInterner.intern(string);
+        String s = getIntToStringMappings().get(stringId);
+        if (s == null) return null;
+        return stringInterner.intern(s);
     }
 
     private void ensureMVStoreAvailable() {

@@ -1,5 +1,6 @@
 package overflowdb.util;
 
+import gnu.trove.list.array.TLongArrayList;
 import overflowdb.Edge;
 import overflowdb.Graph;
 import overflowdb.Node;
@@ -8,37 +9,49 @@ import java.util.*;
 
 public class DiffTool {
 
-  /** compare two graphs element by element
-   * identity of nodes is given by their id, i.e. if the graphs have the same nodes/edges/properties, but use different
-   * node ids, a lot of differences will be reported and the results will be useless
-   */
+  /** compare two graphs element by element */
   public static List<String> compare(Graph graph1, Graph graph2) {
     final List<String> diff = new ArrayList<>();
     if (graph1.nodeCount() != graph2.nodeCount()) {
-      diff.add(String.format("node count differs: graph1=%d, graph2=%d", graph1.nodeCount(), graph2.nodeCount()));
+      diff.add("node count differs: graph1=" + graph1.nodeCount() + ", graph2=" + graph2.nodeCount());
     }
     if (graph1.edgeCount() != graph2.edgeCount()) {
-      diff.add(String.format("edge count differs: graph1=%d, graph2=%d", graph1.edgeCount(), graph2.edgeCount()));
+      diff.add("edge count differs: graph1=" + graph1.edgeCount() + ", graph2=" + graph2.edgeCount());
     }
 
-    SortedSet<Long> nodeIds = new TreeSet<>();
+    TLongArrayList nodeIds = new TLongArrayList(graph1.nodeCount() + graph2.nodeCount());
     graph1.nodes().forEachRemaining(node -> nodeIds.add(node.id()));
     graph2.nodes().forEachRemaining(node -> nodeIds.add(node.id()));
 
-    nodeIds.forEach(nodeId -> {
+    // Sort and remove duplicates to emulate SortedSet behavior efficiently
+    nodeIds.sort();
+    int uniqueCount = 0;
+    if (nodeIds.size() > 0) {
+      int dst = 0;
+      for (int src = 1; src < nodeIds.size(); src++) {
+        if (nodeIds.get(dst) != nodeIds.get(src)) {
+          dst++;
+          nodeIds.set(dst, nodeIds.get(src));
+        }
+      }
+      uniqueCount = dst + 1;
+    }
+
+    for(int i = 0; i < uniqueCount; i++) {
+      long nodeId = nodeIds.get(i);
       final Node node1 = graph1.node(nodeId);
       final Node node2 = graph2.node(nodeId);
-      if (node1 == null) diff.add(String.format("node %s only exists in graph2", node2));
-      else if (node2 == null) diff.add(String.format("node %s only exists in graph1", node1));
+      if (node1 == null) diff.add("node " + node2 + " only exists in graph2");
+      else if (node2 == null) diff.add("node " + node1 + " only exists in graph1");
       else {
         if (!node1.label().equals(node2.label()))
-          diff.add(String.format("different label for nodeId=%d; graph1=%s, graph2=%s ", nodeId, node1.label(), node2.label()));
+          diff.add("different label for nodeId=" + nodeId + "; graph1=" + node1.label() + ", graph2=" + node2.label());
 
         final String context = "nodeId=" + nodeId;
         compareProperties(node1.propertiesMap(), node2.propertiesMap(), diff, context);
         compareEdges(node1.outE(), node2.outE(), diff, context + ".outE");
       }
-    });
+    }
 
     return diff;
   }
@@ -53,16 +66,16 @@ public class DiffTool {
       Object value2 = properties2.get(key);
 
       if (value1 == null) {
-        diff.add(String.format("%s; property '%s' -> '%s' only exists in graph2", context, key, value2));
+        diff.add(context + "; property '" + key + "' -> '" + value2 + "' only exists in graph2");
       } else if (value2 == null) {
-        diff.add(String.format("%s; property '%s' -> '%s' only exists in graph1", context, key, value1));
-      } else { // both values are not null
-        if (value1.getClass().isArray() && value2.getClass().isArray()) { // both values are arrays
+        diff.add(context + "; property '" + key + "' -> '" + value1 + "' only exists in graph1");
+      } else {
+        if (value1.getClass().isArray() && value2.getClass().isArray()) {
           if (!arraysEqual(value1, value2)) {
-            diff.add(String.format("%s; array property '%s' has different values: graph1='%s', graph2='%s'", context, key, value1, value2));
+            diff.add(context + "; array property '" + key + "' has different values: graph1='" + value1 + "', graph2='" + value2 + "'");
           }
-        } else if (!value1.equals(value2)) { // not both values are arrays
-          diff.add(String.format("%s; property '%s' has different values: graph1='%s', graph2='%s'", context, key, value1, value2));
+        } else if (!value1.equals(value2)) {
+          diff.add(context + "; property '" + key + "' has different values: graph1='" + value1 + "', graph2='" + value2 + "'");
         }
       }
     });
@@ -96,7 +109,7 @@ public class DiffTool {
     List<Edge> edges2Sorted = sort(edges2);
 
     if (edges1Sorted.size() != edges2Sorted.size()) {
-      diff.add(String.format("%s; different number of edges: graph1=%d, graph2=%d", context, edges1Sorted.size(), edges2Sorted.size()));
+      diff.add(context + "; different number of edges: graph1=" + edges1Sorted.size() + ", graph2=" + edges2Sorted.size());
     } else {
       Iterator<Edge> edges1SortedIter = edges1Sorted.iterator();
       Iterator<Edge> edges2SortedIter = edges2Sorted.iterator();
@@ -105,18 +118,18 @@ public class DiffTool {
         Edge edge2 = edges2SortedIter.next();
 
         if (!edge1.label().equals(edge2.label()))
-          diff.add(String.format("%s; different label for sorted edges; graph1=%s, graph2=%s ", context, edge1.label(), edge2.label()));
+          diff.add(context + "; different label for sorted edges; graph1=" + edge1.label() + ", graph2=" + edge2.label());
         else
-          compareProperties(edge1.propertiesMap(), edge2.propertiesMap(), diff, String.format("%s; edge label = %s", context, edge1.label()));
+          compareProperties(edge1.propertiesMap(), edge2.propertiesMap(), diff, context + "; edge label = " + edge1.label());
       }
     }
   }
 
   private static List<Edge> sort(Iterator<Edge> edges) {
-    List<Edge> edgesSorted = new LinkedList();
+    List<Edge> edgesSorted = new LinkedList<>();
     edges.forEachRemaining(edgesSorted::add);
     edgesSorted.sort(Comparator.comparing(edge ->
-      String.format("%s %d", edge.label(), edge.propertiesMap().size())
+            edge.label() + " " + edge.propertiesMap().size()
     ));
     return edgesSorted;
   }

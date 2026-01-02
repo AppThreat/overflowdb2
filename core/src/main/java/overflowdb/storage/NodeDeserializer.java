@@ -44,24 +44,27 @@ public class NodeDeserializer extends BookKeeper {
         if (null == bytes)
             return null;
 
-        MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(bytes);
-        final long id = unpacker.unpackLong();
-        final int labelStringId = unpacker.unpackInt();
-        final Object[] properties = unpackProperties(unpacker);
+        try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(bytes)) {
+            final long id = unpacker.unpackLong();
+            final int labelStringId = unpacker.unpackInt();
+            final Object[] properties = unpackProperties(unpacker);
 
-        Map<Integer, String> cache = stringCache.get();
-        final String label = cache.computeIfAbsent(labelStringId,
-                idKey -> storage.reverseLookupStringToIntMapping(idKey));
-        NodeDb node = getNodeFactory(label).createNode(graph, id, ref);
-        PropertyHelper.attachProperties(node, properties);
+            Map<Integer, String> cache = stringCache.get();
+            final String label = cache.computeIfAbsent(labelStringId,
+                    storage::reverseLookupStringToIntMapping);
+            NodeDb node = getNodeFactory(label).createNode(graph, id, ref);
+            PropertyHelper.attachProperties(node, properties);
 
-        deserializeEdges(unpacker, node, Direction.OUT);
-        deserializeEdges(unpacker, node, Direction.IN);
+            deserializeEdges(unpacker, node, Direction.OUT);
+            deserializeEdges(unpacker, node, Direction.IN);
 
-        node.markAsClean();
+            node.markAsClean();
 
-        if (statsEnabled) recordStatistics(startTimeNanos);
-        return node;
+            if (statsEnabled) recordStatistics(startTimeNanos);
+            return node;
+        } finally {
+            stringCache.get().clear();
+        }
     }
 
     private void deserializeEdges(MessageUnpacker unpacker, NodeDb node, Direction direction) throws IOException {
@@ -70,7 +73,7 @@ public class NodeDeserializer extends BookKeeper {
             int edgeLabelId = unpacker.unpackInt();
             Map<Integer, String> cache = stringCache.get();
             String edgeLabel = cache.computeIfAbsent(edgeLabelId,
-                    id -> storage.reverseLookupStringToIntMapping(id));
+                    storage::reverseLookupStringToIntMapping);
             int edgeCount = unpacker.unpackInt();
             for (int edgeIdx = 0; edgeIdx < edgeCount; edgeIdx++) {
                 long adjacentNodeId = unpacker.unpackLong();
@@ -81,15 +84,14 @@ public class NodeDeserializer extends BookKeeper {
         }
     }
 
-  /**
-   * only deserialize the part we're keeping in memory, used during startup when initializing from disk
-   */
-  public final NodeRef<?> deserializeRef(byte[] bytes) throws IOException {
-    try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(bytes)) {
-      long id = unpacker.unpackLong();
-      int labelStringId = unpacker.unpackInt();
-      String label = storage.reverseLookupStringToIntMapping(labelStringId);
-
+    /**
+     * only deserialize the part we're keeping in memory, used during startup when initializing from disk
+     */
+    public final NodeRef<?> deserializeRef(byte[] bytes) throws IOException {
+        try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(bytes)) {
+            long id = unpacker.unpackLong();
+            int labelStringId = unpacker.unpackInt();
+            String label = storage.reverseLookupStringToIntMapping(labelStringId);
             return createNodeRef(id, label);
         }
     }
@@ -102,7 +104,7 @@ public class NodeDeserializer extends BookKeeper {
             int keyId = unpacker.unpackInt();
             Map<Integer, String> cache = stringCache.get();
             final String key = cache.computeIfAbsent(keyId,
-                    id -> storage.reverseLookupStringToIntMapping(id));
+                    storage::reverseLookupStringToIntMapping);
             final ImmutableValue unpackedValue = unpacker.unpackValue();
             final Object unpackedProperty = unpackValue(unpackedValue.asArrayValue());
             res[resIdx++] = key;
@@ -155,93 +157,57 @@ public class NodeDeserializer extends BookKeeper {
         return nodeFactoryByLabel.get(label);
     }
 
-  /** only keeping for legacy reasons, going forward, all lists are stored as arrays */
-  private Object deserializeList(ArrayValue arrayValue) {
-    final List deserializedList = new ArrayList(arrayValue.size());
-      for (Value value : arrayValue) {
-          deserializedList.add(unpackValue(value.asArrayValue()));
-      }
-    return deserializedList;
-  }
+    private Object deserializeList(ArrayValue arrayValue) {
+        final List deserializedList = new ArrayList(arrayValue.size());
+        for (Value value : arrayValue) {
+            deserializedList.add(unpackValue(value.asArrayValue()));
+        }
+        return deserializedList;
+    }
 
     private byte[] deserializeArrayByte(ArrayValue arrayValue) {
-        byte[] deserializedArray = new byte[arrayValue.size()];
-        int idx = 0;
-        for (Value value : arrayValue) {
-            deserializedArray[idx++] = value.asIntegerValue().asByte();
-        }
-        return deserializedArray;
+        byte[] arr = new byte[arrayValue.size()];
+        int i = 0; for(Value v : arrayValue) arr[i++] = v.asIntegerValue().asByte();
+        return arr;
     }
-
     private short[] deserializeArrayShort(ArrayValue arrayValue) {
-        short[] deserializedArray = new short[arrayValue.size()];
-        int idx = 0;
-        for (Value value : arrayValue) {
-            deserializedArray[idx++] = value.asIntegerValue().asShort();
-        }
-        return deserializedArray;
+        short[] arr = new short[arrayValue.size()];
+        int i = 0; for(Value v : arrayValue) arr[i++] = v.asIntegerValue().asShort();
+        return arr;
     }
-
     private int[] deserializeArrayInt(ArrayValue arrayValue) {
-        int[] deserializedArray = new int[arrayValue.size()];
-        int idx = 0;
-        for (Value value : arrayValue) {
-            deserializedArray[idx++] = value.asIntegerValue().asInt();
-        }
-        return deserializedArray;
+        int[] arr = new int[arrayValue.size()];
+        int i = 0; for(Value v : arrayValue) arr[i++] = v.asIntegerValue().asInt();
+        return arr;
     }
-
     private long[] deserializeArrayLong(ArrayValue arrayValue) {
-        long[] deserializedArray = new long[arrayValue.size()];
-        int idx = 0;
-        for (Value value : arrayValue) {
-            deserializedArray[idx++] = value.asIntegerValue().asLong();
-        }
-        return deserializedArray;
+        long[] arr = new long[arrayValue.size()];
+        int i = 0; for(Value v : arrayValue) arr[i++] = v.asIntegerValue().asLong();
+        return arr;
     }
-
     private float[] deserializeArrayFloat(ArrayValue arrayValue) {
-        float[] deserializedArray = new float[arrayValue.size()];
-        int idx = 0;
-        for (Value value : arrayValue) {
-            deserializedArray[idx++] = value.asFloatValue().toFloat();
-        }
-        return deserializedArray;
+        float[] arr = new float[arrayValue.size()];
+        int i = 0; for(Value v : arrayValue) arr[i++] = v.asFloatValue().toFloat();
+        return arr;
     }
-
     private double[] deserializeArrayDouble(ArrayValue arrayValue) {
-        double[] deserializedArray = new double[arrayValue.size()];
-        int idx = 0;
-        for (Value value : arrayValue) {
-            deserializedArray[idx++] = value.asFloatValue().toDouble();
-        }
-        return deserializedArray;
+        double[] arr = new double[arrayValue.size()];
+        int i = 0; for(Value v : arrayValue) arr[i++] = v.asFloatValue().toDouble();
+        return arr;
     }
-
     private char[] deserializeArrayChar(ArrayValue arrayValue) {
-        char[] deserializedArray = new char[arrayValue.size()];
-        int idx = 0;
-        for (Value value : arrayValue) {
-            deserializedArray[idx++] = (char) value.asIntegerValue().asInt();
-        }
-        return deserializedArray;
+        char[] arr = new char[arrayValue.size()];
+        int i = 0; for(Value v : arrayValue) arr[i++] = (char) v.asIntegerValue().asInt();
+        return arr;
     }
-
     private boolean[] deserializeArrayBoolean(ArrayValue arrayValue) {
-        boolean[] deserializedArray = new boolean[arrayValue.size()];
-        int idx = 0;
-        for (Value value : arrayValue) {
-            deserializedArray[idx++] = value.asBooleanValue().getBoolean();
-        }
-        return deserializedArray;
+        boolean[] arr = new boolean[arrayValue.size()];
+        int i = 0; for(Value v : arrayValue) arr[i++] = v.asBooleanValue().getBoolean();
+        return arr;
     }
-
     private Object[] deserializeArrayObject(ArrayValue arrayValue) {
-        Object[] deserializedArray = new Object[arrayValue.size()];
-        int idx = 0;
-        for (Value value : arrayValue) {
-            deserializedArray[idx++] = unpackValue(value.asArrayValue());
-        }
-        return deserializedArray;
+        Object[] arr = new Object[arrayValue.size()];
+        int i = 0; for(Value v : arrayValue) arr[i++] = unpackValue(v.asArrayValue());
+        return arr;
     }
 }

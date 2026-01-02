@@ -1,83 +1,104 @@
 package overflowdb.formats.dot
 
-import overflowdb.formats.{ExportResult, Exporter, iterableForList, resolveOutputFileSingle}
-import overflowdb.{Edge, Node}
+import overflowdb.formats.{ExportResult, Exporter, resolveOutputFileSingle}
+import overflowdb.{Edge, Graph, Node}
 
+import java.io.BufferedWriter
 import java.nio.file.{Files, Path}
-import scala.jdk.CollectionConverters.MapHasAsScala
 import scala.util.Using
+import scala.jdk.CollectionConverters.IterableHasAsScala
 
-/** Exports OverflowDB Graph to graphviz dot/gv file
-  *
-  * Note: GraphML doesn't natively support list property types, so we fake it by encoding it as a
-  * `;` delimited string. If you import this into a different database, you'll need to parse that
-  * separately.
-  *
-  * https://en.wikipedia.org/wiki/DOT_(graph_description_language)
-  * https://www.graphviz.org/doc/info/lang.html http://magjac.com/graphviz-visual-editor/
-  * https://www.slideshare.net/albazo/graphiz-using-the-dot-language
-  */
 object DotExporter extends Exporter:
     override def defaultFileExtension = "dot"
 
-    override def runExport(nodes: IterableOnce[Node], edges: IterableOnce[Edge], outputFile: Path) =
+    override def runExport(graph: Graph, outputFile: Path): ExportResult =
         val outFile = resolveOutputFileSingle(outputFile, s"export.$defaultFileExtension")
         var nodeCount, edgeCount = 0
 
         Using.resource(Files.newBufferedWriter(outFile)) { writer =>
-            def writeLine(line: String): Unit =
-                writer.write(line)
-                writer.newLine()
+            writer.write("digraph {"); writer.newLine()
 
-            writeLine("digraph {")
-
-            nodes.iterator.foreach { node =>
+            val nodeIter = graph.nodes()
+            while nodeIter.hasNext do
+                val node = nodeIter.next()
                 nodeCount += 1
-                writeLine(node2Dot(node))
-            }
+                writeNode(writer, node)
 
-            edges.iterator.foreach { edge =>
+            val edgeIter = graph.edges()
+            while edgeIter.hasNext do
+                val edge = edgeIter.next()
                 edgeCount += 1
-                writeLine(edge2Dot(edge))
-            }
+                writeEdge(writer, edge)
 
-            writeLine("}")
+            writer.write("}")
+            writer.newLine()
         }
 
-        ExportResult(
-          nodeCount = nodeCount,
-          edgeCount = edgeCount,
-          files = Seq(outFile),
-          additionalInfo = None
-        )
+        ExportResult(nodeCount, edgeCount, Seq(outFile), None)
     end runExport
 
-    private def node2Dot(node: Node): String =
-        s"  ${node.id} [label=${node.label} ${properties2Dot(node.propertiesMap)}]"
+    private def writeNode(writer: BufferedWriter, node: Node): Unit =
+        writer.write(s"  ${node.id} [label=${node.label}")
+        writeProperties(writer, node.propertiesMap)
+        writer.write("]")
+        writer.newLine()
 
-    private def edge2Dot(edge: Edge): String =
-        s"  ${edge.outNode.id} -> ${edge.inNode.id} [label=${edge.label} ${properties2Dot(edge.propertiesMap)}]"
+    private def writeEdge(writer: BufferedWriter, edge: Edge): Unit =
+        writer.write(s"  ${edge.outNode.id} -> ${edge.inNode.id} [label=${edge.label}")
+        writeProperties(writer, edge.propertiesMap)
+        writer.write("]")
+        writer.newLine()
 
-    private def properties2Dot(properties: java.util.Map[String, Object]): String =
-        properties.asScala
-            .map { case (key, value) =>
-                s"$key=${encodePropertyValue(value)}"
+    private def writeProperties(
+      writer: BufferedWriter,
+      properties: java.util.Map[String, Object]
+    ): Unit =
+        if !properties.isEmpty then
+            properties.forEach { (key, value) =>
+                writer.write(" ")
+                writer.write(key)
+                writer.write("=")
+                writer.write(encodePropertyValue(value))
             }
-            .mkString(" ")
 
     private def encodePropertyValue(value: Object): String =
         value match
-            case value: String =>
-                val escaped =
-                    value
-                        .replace("""\""", """\\""") // escape escape chars - this should come first
-                        .replace(
-                          "\"",
-                          "\\\""
-                        ) // escape double quotes, because we use them to enclose strings
-                s"\"$escaped\""
-            case list if iterableForList.isDefinedAt(list) =>
-                val values = iterableForList(list).mkString(";")
-                s"\"$values\""
-            case value => value.toString
+            case s: String =>
+                escapeString(s)
+            case l: java.lang.Iterable[?] =>
+                val sb = new StringBuilder()
+                sb.append('"')
+                val it    = l.iterator()
+                var first = true
+                while it.hasNext do
+                    if !first then sb.append(';')
+                    sb.append(it.next().toString)
+                    first = false
+                sb.append('"')
+                sb.toString
+            case arr: Array[?] =>
+                val sb = new StringBuilder()
+                sb.append('"')
+                var first = true
+                for item <- arr do
+                    if !first then sb.append(';')
+                    sb.append(item.toString)
+                    first = false
+                sb.append('"')
+                sb.toString
+            case _ => value.toString
+
+    private def escapeString(s: String): String =
+        val sb = new StringBuilder(s.length + 2)
+        sb.append('"')
+        var i = 0
+        while i < s.length do
+            val c = s.charAt(i)
+            if c == '"' then sb.append("\\\"")
+            else if c == '\\' then sb.append("\\\\")
+            else sb.append(c)
+            i += 1
+        sb.append('"')
+        sb.toString
+
 end DotExporter

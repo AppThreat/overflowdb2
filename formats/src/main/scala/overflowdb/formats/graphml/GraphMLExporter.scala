@@ -1,132 +1,176 @@
 package overflowdb.formats.graphml
 
 import overflowdb.formats.{ExportResult, Exporter, isList, resolveOutputFileSingle, writeFile}
-import overflowdb.{Edge, Element, Node}
+import overflowdb.{Edge, Element, Graph, Node}
 
-import java.lang.System.lineSeparator
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.MapHasAsScala
-import scala.xml.{PrettyPrinter, XML}
+import scala.util.Using
 
-/** Exports OverflowDB Graph to GraphML
-  *
-  * Warning: list properties are not natively supported by graphml... We initially built some
-  * support for those which deviated from the spec, but given that other tools don't support it,
-  * some refusing to import the remainder, we've dropped it. Now, lists are serialised to
-  * `;`-separated strings.
-  *
-  * https://en.wikipedia.org/wiki/GraphML http://graphml.graphdrawing.org/primer/graphml-primer.html
-  */
 object GraphMLExporter extends Exporter:
-
     override def defaultFileExtension = "xml"
 
-    override def runExport(
-      nodes: IterableOnce[Node],
-      edges: IterableOnce[Edge],
-      outputFile: Path
-    ): ExportResult =
+    override def runExport(graph: Graph, outputFile: Path): ExportResult =
         val outFile = resolveOutputFileSingle(outputFile, s"export.$defaultFileExtension")
         val nodePropertyContextById    = mutable.Map.empty[String, PropertyContext]
         val edgePropertyContextById    = mutable.Map.empty[String, PropertyContext]
         val discardedListPropertyCount = new AtomicInteger(0)
 
-        val nodeEntries = nodes.iterator.map { node =>
-            s"""<node id="${node.id}">
-         |    <data key="$KeyForNodeLabel">${node.label}</data>
-         |    ${dataEntries("node", node, nodePropertyContextById, discardedListPropertyCount)}
-         |</node>
-         |""".stripMargin
-        }.toSeq
+        val nodeScan = graph.nodes()
+        while nodeScan.hasNext do
+            collectKeys(
+              nodeScan.next(),
+              "node",
+              nodePropertyContextById,
+              discardedListPropertyCount
+            )
+        val edgeScan = graph.edges()
+        while edgeScan.hasNext do
+            collectKeys(
+              edgeScan.next(),
+              "edge",
+              edgePropertyContextById,
+              discardedListPropertyCount
+            )
 
-        val edgeEntries = edges.iterator.map { edge =>
-            s"""<edge source="${edge.outNode.id}" target="${edge.inNode.id}">
-         |    <data key="$KeyForEdgeLabel">${edge.label}</data>
-         |    ${dataEntries("edge", edge, edgePropertyContextById, discardedListPropertyCount)}
-         |</edge>
-         |""".stripMargin
-        }.toSeq
+        var nodeCount = 0
+        var edgeCount = 0
 
-        def propertyKeyXml(
-          forAttr: String,
-          propsMap: mutable.Map[String, PropertyContext]
-        ): String =
-            propsMap
-                .map { case (key, PropertyContext(name, tpe)) =>
-                    s"""<key id="$key" for="$forAttr" attr.name="$name" attr.type="$tpe"></key>"""
-                }
-                .mkString(lineSeparator)
-        val nodePropertyKeyEntries = propertyKeyXml("node", nodePropertyContextById)
-        val edgePropertyKeyEntries = propertyKeyXml("edge", edgePropertyContextById)
+        Using.resource(Files.newBufferedWriter(outFile)) { writer =>
+            writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+            writer.newLine()
+            writer.write(
+              "<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd\">"
+            )
+            writer.newLine()
 
-        val xml = s"""
-       |<?xml version="1.0" encoding="UTF-8"?>
-       |<graphml xmlns="http://graphml.graphdrawing.org/xmlns"
-       |  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-       |  xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
-       |    <key id="$KeyForNodeLabel" for="node" attr.name="$KeyForNodeLabel" attr.type="string"></key>
-       |    <key id="$KeyForEdgeLabel" for="edge" attr.name="$KeyForEdgeLabel" attr.type="string"></key>
-       |    $nodePropertyKeyEntries
-       |    $edgePropertyKeyEntries
-       |    <graph id="G" edgedefault="directed">
-       |      ${nodeEntries.mkString(lineSeparator)}
-       |      ${edgeEntries.mkString(lineSeparator)}
-       |    </graph>
-       |</graphml>
-       |""".stripMargin.trim
-        writeFile(outFile, xml)
-        xmlFormatInPlace(outFile)
+            writeKeyDefs(writer, "node", nodePropertyContextById)
+            writeKeyDefs(writer, "edge", edgePropertyContextById)
+
+            writer.write("    <graph id=\"G\" edgedefault=\"directed\">")
+            writer.newLine()
+
+            val nodes = graph.nodes()
+            while nodes.hasNext do
+                val node = nodes.next()
+                nodeCount += 1
+                writeNode(writer, node, nodePropertyContextById)
+
+            val edges = graph.edges()
+            while edges.hasNext do
+                val edge = edges.next()
+                edgeCount += 1
+                writeEdge(writer, edge, edgePropertyContextById)
+
+            writer.write("    </graph>")
+            writer.newLine()
+            writer.write("</graphml>")
+        }
 
         val additionalInfo =
-            Some(discardedListPropertyCount.get)
-                .filter(_ > 0)
-                .map { count =>
-                    s"warning: discarded $count list properties (because they are not supported by the graphml spec)"
-                }
+            Some(discardedListPropertyCount.get).filter(_ > 0).map { count =>
+                s"warning: discarded $count list properties (because they are not supported by the graphml spec)"
+            }
 
-        ExportResult(
-          nodeCount = nodeEntries.size,
-          edgeCount = edgeEntries.size,
-          files = Seq(outFile),
-          additionalInfo
-        )
+        ExportResult(nodeCount, edgeCount, Seq(outFile), additionalInfo)
     end runExport
 
-    /** warning: updates type information based on runtime instances (in mutable.Map
-      * `propertyTypeByName`) warning2: updated the `discardedListPropertyCount` counter - if we
-      * need to discard any list properties, display a warning to the user
-      */
-    private def dataEntries(
+    private def collectKeys(
+      element: Element,
+      prefix: String,
+      context: mutable.Map[String, PropertyContext],
+      discarded: AtomicInteger
+    ): Unit =
+        val it = element.propertiesMap.entrySet().iterator()
+        while it.hasNext do
+            val entry = it.next()
+            if isList(entry.getValue.getClass) then
+                discarded.incrementAndGet()
+            else
+                val encodedName = s"${prefix}__${element.label}__${entry.getKey}"
+                if !context.contains(encodedName) then
+                    context.put(
+                      encodedName,
+                      PropertyContext(entry.getKey, Type.fromRuntimeClass(entry.getValue.getClass))
+                    )
+    end collectKeys
+
+    private def writeKeyDefs(
+      writer: java.io.BufferedWriter,
+      forAttr: String,
+      context: mutable.Map[String, PropertyContext]
+    ): Unit =
+        writer.write(
+          s"""    <key id="$KeyForNodeLabel" for="node" attr.name="$KeyForNodeLabel" attr.type="string"></key>"""
+        )
+        writer.newLine()
+        writer.write(
+          s"""    <key id="$KeyForEdgeLabel" for="edge" attr.name="$KeyForEdgeLabel" attr.type="string"></key>"""
+        )
+        writer.newLine()
+
+        context.foreach { case (key, PropertyContext(name, tpe)) =>
+            writer.write(
+              s"""    <key id="$key" for="$forAttr" attr.name="$name" attr.type="$tpe"></key>"""
+            )
+            writer.newLine()
+        }
+    end writeKeyDefs
+
+    private def writeNode(
+      writer: java.io.BufferedWriter,
+      node: Node,
+      context: mutable.Map[String, PropertyContext]
+    ): Unit =
+        writer.write(s"""        <node id="${node.id}">""")
+        writer.newLine()
+        writer.write(s"""            <data key="$KeyForNodeLabel">${node.label}</data>""")
+        writer.newLine()
+        writeDataEntries(writer, "node", node, context)
+        writer.write("        </node>")
+        writer.newLine()
+
+    private def writeEdge(
+      writer: java.io.BufferedWriter,
+      edge: Edge,
+      context: mutable.Map[String, PropertyContext]
+    ): Unit =
+        writer.write(s"""        <edge source="${edge.outNode.id}" target="${edge.inNode.id}">""")
+        writer.newLine()
+        writer.write(s"""            <data key="$KeyForEdgeLabel">${edge.label}</data>""")
+        writer.newLine()
+        writeDataEntries(writer, "edge", edge, context)
+        writer.write("        </edge>")
+        writer.newLine()
+
+    private def writeDataEntries(
+      writer: java.io.BufferedWriter,
       prefix: String,
       element: Element,
-      propertyContextById: mutable.Map[String, PropertyContext],
-      discardedListPropertyCount: AtomicInteger
-    ): String =
-        element.propertiesMap.asScala
-            .map { case (propertyName, propertyValue) =>
-                if isList(propertyValue.getClass) then
-                    discardedListPropertyCount.incrementAndGet()
-                    "" // discard list properties
-                else   // scalar value
-                    val encodedPropertyName = s"${prefix}__${element.label}__$propertyName"
-                    val graphMLTpe          = Type.fromRuntimeClass(propertyValue.getClass)
+      context: mutable.Map[String, PropertyContext]
+    ): Unit =
+        val it = element.propertiesMap.entrySet().iterator()
+        while it.hasNext do
+            val entry = it.next()
+            if !isList(entry.getValue.getClass) then
+                val encodedName = s"${prefix}__${element.label}__${entry.getKey}"
+                val xmlEncoded  = escapeXml(entry.getValue.toString)
+                writer.write(s"""            <data key="$encodedName">$xmlEncoded</data>""")
+                writer.newLine()
 
-                    /* update type information based on runtime instances */
-                    if !propertyContextById.contains(encodedPropertyName) then
-                        propertyContextById.update(
-                          encodedPropertyName,
-                          PropertyContext(propertyName, graphMLTpe)
-                        )
-                    val xmlEncoded = xml.Utility.escape(propertyValue.toString)
-                    s"""<data key="$encodedPropertyName">$xmlEncoded</data>"""
-            }
-            .mkString(lineSeparator)
-
-    private def xmlFormatInPlace(xmlFile: Path): Unit =
-        val xml           = XML.loadFile(xmlFile.toFile)
-        val prettyPrinter = new PrettyPrinter(120, 2)
-        val formatted     = prettyPrinter.format(xml)
-        writeFile(xmlFile, formatted)
+    private def escapeXml(s: String): String =
+        val sb = new StringBuilder(s.length)
+        var i  = 0
+        while i < s.length do
+            s.charAt(i) match
+                case '<'  => sb.append("&lt;")
+                case '>'  => sb.append("&gt;")
+                case '&'  => sb.append("&amp;")
+                case '"'  => sb.append("&quot;")
+                case '\'' => sb.append("&apos;")
+                case c    => sb.append(c)
+            i += 1
+        sb.toString
 end GraphMLExporter

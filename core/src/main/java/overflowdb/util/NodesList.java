@@ -10,7 +10,7 @@ import overflowdb.storage.NodesWriter;
 import java.util.*;
 
 public class NodesList {
-  private Node[] nodes;
+  private volatile Node[] nodes;
   private int size = 0;
 
   //index into `nodes` array by node id
@@ -84,12 +84,12 @@ public class NodesList {
     nodes[index] = null;
     emptySlots.set(index);
 
-    /* We drop the entire `nodesByLabel` index and will rebuild it on the next index lookup...
-       Context: we don't know the exact position of this node in the `nodesByLabel` index, and
-       searching it is O(n).
-       We considered using a separate TLongIntMap for the Id->Index mapping, but that would
-       consume 12-20b per node */
-    this.nodesByLabel = null;
+    if (this.nodesByLabel != null) {
+      ArrayList<Node> list = this.nodesByLabel.get(node.label());
+      if (list != null) {
+        list.remove(node);
+      }
+    }
 
     size--;
     compactMaybe();
@@ -114,8 +114,8 @@ public class NodesList {
       TMap<String, ArrayList<Node>> tmp = new THashMap<>();
       for (Node node : nodes) {
         if (node != null) {
-            ArrayList<Node> nodelist = tmp.computeIfAbsent(node.label(), k -> new ArrayList<>());
-            nodelist.add(node);
+          ArrayList<Node> nodelist = tmp.computeIfAbsent(node.label(), k -> new ArrayList<>());
+          nodelist.add(node);
         }
       }
       this.nodesByLabel = tmp;
@@ -124,22 +124,22 @@ public class NodesList {
 
   public ArrayList<Node> nodesByLabel(String label) {
     TMap<String, ArrayList<Node>> nodesByLabel = getNodesByLabel();
-      return nodesByLabel.computeIfAbsent(label, k -> new ArrayList<>());
+    return nodesByLabel.computeIfAbsent(label, k -> new ArrayList<>());
   }
 
   public Set<String> nodeLabels() {
     TMap<String, ArrayList<Node>> nodesByLabel = getNodesByLabel();
     Set<String> ret = new HashSet<>(nodesByLabel.size());
     nodesByLabel.forEach((key, value) -> {
-        if (!value.isEmpty()) {
-            ret.add(key);
-        }
+      if (!value.isEmpty()) {
+        ret.add(key);
+      }
     });
     return ret;
   }
 
   public synchronized Iterator<Node> iterator() {
-    return new NodesIterator(Arrays.copyOf(nodes, nodes.length));
+    return new NodesIterator(nodes);
   }
 
   private void ensureCapacity(int minCapacity) {
@@ -159,62 +159,48 @@ public class NodesList {
    * garbage collected. Creates a new `nodes` array which contains all existing nodes.  */
   synchronized void compact() {
     final ArrayList<Node> newNodes = new ArrayList<>(size);
-    Iterator<Node> iter = iterator();
-    while (iter.hasNext()) {
-      newNodes.add(iter.next());
+    for(Node n : nodes) {
+      if(n != null) newNodes.add(n);
     }
-    nodes = newNodes.toArray(new Node[size]);
+    Node[] nextNodesArray = newNodes.toArray(new Node[size]);
 
     //reindex helper collections
     emptySlots.clear();
-    nodeIndexByNodeId = new TLongIntHashMap(this.nodes.length);
+    nodeIndexByNodeId = new TLongIntHashMap(nextNodesArray.length);
 
     int idx = 0;
-    while (idx < this.nodes.length) {
-      Node node = this.nodes[idx];
+    while (idx < nextNodesArray.length) {
+      Node node = nextNodesArray[idx];
       nodeIndexByNodeId.put(node.id(), idx);
       idx++;
     }
+    nodes = nextNodesArray;
   }
 
-  /** The maximum size of array to allocate.
-   * Some VMs reserve some header words in an array.
-   * Attempts to allocate larger arrays may result in
-   * OutOfMemoryError: Requested array size exceeds VM limit
-   * @see java.util.ArrayList (copied from there)
-   */
   private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
-  /** Increases the capacity to ensure that it can hold at least the
-   * number of elements specified by the minimum capacity argument.
-   * @see java.util.ArrayList (copied from there) */
   private synchronized void grow(int minCapacity) {
-    // overflow-conscious code
     int oldCapacity = nodes.length;
     int newCapacity = oldCapacity + (oldCapacity >> 1);
     if (newCapacity - minCapacity < 0)
       newCapacity = minCapacity;
     if (newCapacity - MAX_ARRAY_SIZE > 0)
       newCapacity = hugeCapacity(minCapacity);
-    // minCapacity is usually close to size, so this is a win:
     nodes = Arrays.copyOf(nodes, newCapacity);
   }
 
- /** @see java.util.ArrayList (copied from there) */
   private static int hugeCapacity(int minCapacity) {
-    if (minCapacity < 0) // overflow
+    if (minCapacity < 0)
       throw new OutOfMemoryError();
     return (minCapacity > MAX_ARRAY_SIZE) ?
-        Integer.MAX_VALUE :
-        MAX_ARRAY_SIZE;
+            Integer.MAX_VALUE :
+            MAX_ARRAY_SIZE;
   }
 
-  /** just for unit test */
   protected int _elementDataSize() {
     return nodes.length;
   }
 
-  /** cardinality of nodes for given label */
   public int cardinality(String label) {
     TMap<String, ArrayList<Node>> nodesByLabel = getNodesByLabel();
     if (nodesByLabel.containsKey(label))
@@ -228,18 +214,18 @@ public class NodesList {
   }
 
   public static class NodesIterator implements Iterator<Node> {
-    final Node[] nodes;
-    int idx = 0;
-    Node nextPeeked = null;
+    private final Node[] snapshot;
+    private int idx = 0;
+    private Node nextPeeked = null;
 
-    public NodesIterator(Node[] nodes) {
-      this.nodes = nodes;
+    public NodesIterator(Node[] snapshot) {
+      this.snapshot = snapshot;
     }
 
     @Override
     public boolean hasNext() {
-      while (nextPeeked == null && idx < nodes.length) {
-        nextPeeked = nodes[idx++];
+      while (nextPeeked == null && idx < snapshot.length) {
+        nextPeeked = snapshot[idx++];
       }
       return nextPeeked != null;
     }
@@ -254,5 +240,4 @@ public class NodesList {
       }
     }
   }
-
 }
