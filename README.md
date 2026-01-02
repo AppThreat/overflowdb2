@@ -22,7 +22,7 @@ This library has undergone rigorous optimization to support massive graphs (10M+
   - _Solution:_ We implemented a bi-directional index backed by **H2 MVStore**. String-to-Int mapping happens in memory, but Int-to-String (reverse lookup) is offloaded to disk. This reduces Heap usage by ~40% for large CPGs.
 - **Weak Interning:**
   - String properties are interned using **Guava's `WeakInterner`**. Unlike standard `ConcurrentHashMap` caching, this allows the Garbage Collector to reclaim string memory when nodes are unloaded, preventing long-term memory leaks during batch processing.
-- **Corrected Cache Sizing:** H2 MVStore cache is strictly capped (default 128MB) to prevent the backing store from competing with the graph heap space.
+- **Cache Sizing:** H2 MVStore cache is capped (default 256MB) to prevent the backing store from competing with the graph heap space.
 
 ### 2. Zero-Allocation Serialization
 
@@ -36,7 +36,7 @@ This library has undergone rigorous optimization to support massive graphs (10M+
 - **$O(1)$ Batch Clearing:** The `ReferenceManager` uses a `ConcurrentLinkedQueue` instead of `ArrayList` for managing unloadable references, preventing $O(N)$ array-shift costs during batch evictions.
 - **Smart Indexing:**
   - `NodesList` (the central node registry) uses "Stride-based" indexing and avoids full index reconstruction on node removal.
-  - `IndexManager` performs property-aware deletion ($O(\text{Props})$) rather than full-index scanning ($O(\text{IndexSize})$) when removing nodes.
+  - `IndexManager` performs property-aware deletion rather than full-index scanning when removing nodes.
 - **Primitive Collections:** The `DiffTool` and internal maps utilize **Trove4j** (`TLongArrayList`, `TLongIntHashMap`) to reduce the memory overhead of Java's standard Collection framework by ~5x.
 
 ## Installation
