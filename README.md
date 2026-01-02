@@ -118,7 +118,7 @@ graph.close(); // Persists to disk if storage location is set
 | Config Option               | Default    | Description                                                                                                                                                            |
 | :-------------------------- | :--------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `heapPercentageThreshold`   | `80`       | When JVM Heap usage exceeds this %, `ReferenceManager` begins clearing strong references to nodes, turning them into `NodeRef` (pointers) and persisting data to disk. |
-| `cacheSize`                 | `128` (MB) | The amount of RAM H2 MVStore is allowed to use for off-heap caching of the string dictionary and raw node bytes.                                                       |
+| `cacheSize`                 | `256` (MB) | The amount of RAM H2 MVStore is allowed to use for off-heap caching of the string dictionary and raw node bytes.                                                       |
 | `serializationStatsEnabled` | `false`    | Set to `true` to debug serialization throughput performance.                                                                                                           |
 
 ## Testing & Diffing
