@@ -1,62 +1,45 @@
 package overflowdb.storage;
 
-/* when serializing values we need to encode the id type in a separate entry, to ensure we can deserialize it
- * back to the very same type. I would have hoped that MsgPack does that for us, but that's only partly the case.
- * E.g. the different integer types cannot be distinguished other than by their value. When we deserialize `42`,
- * we have no idea whether it should be deserialized as a byte, short, integer or double */
 public enum ValueTypes {
-  BOOLEAN((byte) 0),
-  STRING((byte) 1),
-  BYTE((byte) 2),
-  SHORT((byte) 3),
-  INTEGER((byte) 4),
-  LONG((byte) 5),
-  FLOAT((byte) 6),
-  DOUBLE((byte) 7),
-  LIST((byte) 8), // only keeping for legacy reasons, going forward, all lists are stored as arrays
-  NODE_REF((byte) 9),
-  UNKNOWN((byte) 10),
-  CHARACTER((byte) 11),
-  ARRAY_BYTE((byte) 12),
-  ARRAY_SHORT((byte) 13),
-  ARRAY_INT((byte) 14),
-  ARRAY_LONG((byte) 15),
-  ARRAY_FLOAT((byte) 16),
-  ARRAY_DOUBLE((byte) 17),
-  ARRAY_CHAR((byte) 18),
-  ARRAY_BOOL((byte) 19),
-  ARRAY_OBJECT((byte) 20);
+    BOOLEAN((byte) 0),
+    STRING((byte) 1),
+    BYTE((byte) 2),
+    SHORT((byte) 3),
+    INTEGER((byte) 4),
+    LONG((byte) 5),
+    FLOAT((byte) 6),
+    DOUBLE((byte) 7),
+    LIST((byte) 8),
+    NODE_REF((byte) 9),
+    UNKNOWN((byte) 10),
+    CHARACTER((byte) 11),
+    ARRAY_BYTE((byte) 12),
+    ARRAY_SHORT((byte) 13),
+    ARRAY_INT((byte) 14),
+    ARRAY_LONG((byte) 15),
+    ARRAY_FLOAT((byte) 16),
+    ARRAY_DOUBLE((byte) 17),
+    ARRAY_CHAR((byte) 18),
+    ARRAY_BOOL((byte) 19),
+    ARRAY_OBJECT((byte) 20);
 
-  public final byte id;
+    public final byte id;
 
-  ValueTypes(byte id) {
-    this.id = id;
-  }
+    ValueTypes(byte id) {
+        this.id = id;
+    }
 
-  public static ValueTypes lookup(byte id) {
-      return switch (id) {
-          case 0 -> BOOLEAN;
-          case 1 -> STRING;
-          case 2 -> BYTE;
-          case 3 -> SHORT;
-          case 4 -> INTEGER;
-          case 5 -> LONG;
-          case 6 -> FLOAT;
-          case 7 -> DOUBLE;
-          case 8 -> LIST;
-          case 9 -> NODE_REF;
-          case 10 -> UNKNOWN;
-          case 11 -> CHARACTER;
-          case 12 -> ARRAY_BYTE;
-          case 13 -> ARRAY_SHORT;
-          case 14 -> ARRAY_INT;
-          case 15 -> ARRAY_LONG;
-          case 16 -> ARRAY_FLOAT;
-          case 17 -> ARRAY_DOUBLE;
-          case 18 -> ARRAY_CHAR;
-          case 19 -> ARRAY_BOOL;
-          case 20 -> ARRAY_OBJECT;
-          default -> throw new IllegalArgumentException("unknown id type " + id);
-      };
-  }
+    private static final ValueTypes[] LOOKUP_CACHE = new ValueTypes[21];
+    static {
+        for (ValueTypes v : values()) {
+            LOOKUP_CACHE[v.id] = v;
+        }
+    }
+
+    public static ValueTypes lookup(byte id) {
+        if (id >= 0 && id < LOOKUP_CACHE.length) {
+            return LOOKUP_CACHE[id];
+        }
+        throw new IllegalArgumentException("unknown id type " + id);
+    }
 }

@@ -5,6 +5,7 @@ import overflowdb.NodeDb;
 import overflowdb.NodeRef;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Spliterator;
 import java.util.stream.StreamSupport;
 
@@ -21,30 +22,28 @@ public class NodesWriter {
         this.storage = storage;
     }
 
-  /**
-   * Writes all references to storage, blocks until complete.
-   * Serialization happens in parallel, however writing to storage happens sequentially, to avoid lock contention in mvstore.
-   */
-  public void writeAndClearBatched(Spliterator<? extends Node> nodes, int estimatedTotalCount) {
-    StreamSupport.stream(nodes, true)
-        .map(this::serializeIfDirty)
-        .sequential()
-        .forEach(serializedNode -> {
-          if (serializedNode != null) {
-            storage.persist(serializedNode.id, serializedNode.data);
-          }
-        });
-  }
-  private SerializedNode serializeIfDirty(Node node) {
-    NodeDb nodeDb = null;
-    NodeRef<?> ref = null;
-    if (node instanceof NodeDb) {
-      nodeDb = (NodeDb) node;
-      ref = nodeDb.ref;
-    } else if (node instanceof NodeRef) {
-      ref = (NodeRef) node;
-      if (ref.isSet()) nodeDb = ref.get();
+    /**
+     * Writes all references to storage, blocks until complete.
+     * Serialization happens in parallel, however writing to storage happens sequentially, to avoid lock contention in mvstore.
+     */
+    public void writeAndClearBatched(Spliterator<? extends Node> nodes, int estimatedTotalCount) {
+        StreamSupport.stream(nodes, true)
+                .map(this::serializeIfDirty)
+                .filter(Objects::nonNull)
+                .sequential()
+                .forEach(serializedNode -> storage.persist(serializedNode.id, serializedNode.data));
     }
+
+    private SerializedNode serializeIfDirty(Node node) {
+        NodeDb nodeDb = null;
+        NodeRef<?> ref = null;
+        if (node instanceof NodeDb) {
+            nodeDb = (NodeDb) node;
+            ref = nodeDb.ref;
+        } else if (node instanceof NodeRef) {
+            ref = (NodeRef) node;
+            if (ref.isSet()) nodeDb = ref.get();
+        }
 
         if (nodeDb != null && nodeDb.isDirty()) {
             try {
@@ -67,5 +66,4 @@ public class NodesWriter {
             this.data = data;
         }
     }
-
 }

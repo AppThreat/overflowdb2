@@ -14,8 +14,8 @@ import java.util.stream.LongStream;
 public final class IndexManager {
 
   private final Graph graph;
-  private Map<String, Map<Object, Set<NodeRef>>> indexes = new ConcurrentHashMap<>();
-  private Map<String, Boolean> dirtyFlags = new ConcurrentHashMap<>();
+  private final Map<String, Map<Object, Set<NodeRef>>> indexes = new ConcurrentHashMap<>();
+  private final Map<String, Boolean> dirtyFlags = new ConcurrentHashMap<>();
 
   public IndexManager(Graph graph) {
     this.graph = graph;
@@ -28,17 +28,11 @@ public final class IndexManager {
    */
   public void createNodePropertyIndex(final String propertyName) {
     checkPropertyName(propertyName);
-
-    if (indexes.containsKey(propertyName))
-      return;
-
+    if (indexes.containsKey(propertyName)) return;
     dirtyFlags.put(propertyName, true);
-
     graph.nodes.iterator().forEachRemaining(node -> {
       Object value = node.property(propertyName);
-      if (value != null) {
-        put(propertyName, value, (NodeRef) node);
-      }
+      if (value != null) put(propertyName, value, (NodeRef) node);
     });
   }
 
@@ -54,8 +48,8 @@ public final class IndexManager {
   private void loadNodePropertyIndex(final String propertyName, Map<Object, long[]> valueToNodeIds) {
     dirtyFlags.put(propertyName, false);
     valueToNodeIds.entrySet().parallelStream().forEach(entry ->
-        LongStream.of(entry.getValue())
-          .forEach(nodeId -> put(propertyName, entry.getKey(), (NodeRef) graph.node(nodeId))));
+            LongStream.of(entry.getValue())
+                    .forEach(nodeId -> put(propertyName, entry.getKey(), (NodeRef) graph.node(nodeId))));
   }
 
   public void putIfIndexed(final String key, final Object newValue, final NodeRef<?> nodeRef) {
@@ -66,16 +60,8 @@ public final class IndexManager {
   }
 
   private void put(final String key, final Object value, final NodeRef<?> nodeRef) {
-    Map<Object, Set<NodeRef>> keyMap = indexes.get(key);
-    if (null == keyMap) {
-      indexes.putIfAbsent(key, new ConcurrentHashMap<>());
-      keyMap = indexes.get(key);
-    }
-    Set<NodeRef> objects = keyMap.get(value);
-    if (null == objects) {
-      keyMap.putIfAbsent(value, ConcurrentHashMap.newKeySet());
-      objects = keyMap.get(value);
-    }
+    Map<Object, Set<NodeRef>> keyMap = indexes.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
+    Set<NodeRef> objects = keyMap.computeIfAbsent(value, k -> ConcurrentHashMap.newKeySet());
     objects.add(nodeRef);
   }
 
@@ -89,9 +75,6 @@ public final class IndexManager {
     }
   }
 
-  /**
-   * Return all the keys currently being indexed for nodes.
-   */
   public Set<String> getIndexedNodeProperties() {
     return indexes.keySet();
   }
@@ -107,10 +90,7 @@ public final class IndexManager {
       return Collections.emptyList();
     } else {
       Set<NodeRef> set = keyMap.get(value);
-      if (null == set)
-        return Collections.emptyList();
-      else
-        return new ArrayList<>(set);
+      return set == null ? Collections.emptyList() : new ArrayList<>(set);
     }
   }
 
@@ -122,19 +102,21 @@ public final class IndexManager {
       if (null != objects) {
         objects.remove(nodeRef);
         if (objects.isEmpty()) {
-          keyMap.remove(key);
+          keyMap.remove(value);
         }
       }
     }
   }
 
   void removeElement(final NodeRef<?> nodeRef) {
-    for (String propertyName : indexes.keySet())
-      dirtyFlags.put(propertyName, true);
-    for (Map<Object, Set<NodeRef>> map : indexes.values()) {
-      for (Set<NodeRef> set : map.values()) {
-        set.remove(nodeRef);
-      }
+    NodeDb node = nodeRef.get();
+    for (String propertyName : node.propertyKeys()) {
+        if (indexes.containsKey(propertyName)) {
+            Object value = node.property(propertyName);
+            if (value != null) {
+                remove(propertyName, value, nodeRef);
+            }
+        }
     }
   }
 
@@ -143,10 +125,7 @@ public final class IndexManager {
   }
 
   void initializeStoredIndices(OdbStorage storage) {
-    storage
-        .getIndexNames()
-        .stream()
-        .forEach(indexName -> loadIndex(indexName, storage));
+    storage.getIndexNames().forEach(indexName -> loadIndex(indexName, storage));
   }
 
   private void loadIndex(String indexName, OdbStorage storage) {
@@ -155,20 +134,20 @@ public final class IndexManager {
   }
 
   void storeIndexes(OdbStorage storage) {
-    getIndexedNodeProperties()
-        .stream()
-        .forEach(propertyName ->
+    getIndexedNodeProperties().forEach(propertyName ->
             saveIndex(storage, propertyName, getIndexMap(propertyName)));
   }
 
   private void saveIndex(OdbStorage storage, String propertyName, Map<Object, Set<NodeRef>> indexMap) {
-    if (dirtyFlags.get(propertyName)) {
+    if (dirtyFlags.getOrDefault(propertyName, false)) {
       storage.clearIndex(propertyName);
       final MVMap<Object, long[]> indexStore = storage.openIndex(propertyName);
       indexMap.entrySet().parallelStream().forEach(entry -> {
         final Object propertyValue = entry.getKey();
         final Set<NodeRef> nodeRefs = entry.getValue();
-        indexStore.put(propertyValue, nodeRefs.stream().mapToLong(nodeRef -> nodeRef.id).toArray());
+        if (!nodeRefs.isEmpty()) {
+          indexStore.put(propertyValue, nodeRefs.stream().mapToLong(nodeRef -> nodeRef.id).toArray());
+        }
       });
       dirtyFlags.put(propertyName, false);
     }
