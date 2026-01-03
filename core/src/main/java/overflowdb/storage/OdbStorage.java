@@ -216,8 +216,8 @@ public class OdbStorage implements AutoCloseable {
     private MVStore initializeMVStore() {
         MVStore.Builder builder = new MVStore.Builder()
                 .compressHigh()
-                .autoCompactFillRate(DEFAULT_COMPACT_FILL_RATE)
-                .autoCommitBufferSize(DEFAULT_COMMIT_BUFFER_SIZE);
+                .autoCommitDisabled()
+                .autoCompactFillRate(DEFAULT_COMPACT_FILL_RATE);
         if (config.getCacheSize().isPresent()) {
             builder.cacheSize(config.getCacheSize().get());
         }
