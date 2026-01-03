@@ -48,7 +48,7 @@ This library has undergone rigorous optimization to support massive graphs (10M+
 resolvers += Resolver.githubPackages("appthreat/overflowdb2")
 
 libraryDependencies ++= Seq(
-  "io.appthreat" %% "overflowdb2-core" % "2.2.0"
+  "io.appthreat" %% "overflowdb2-core" % "2.2.1"
 )
 ```
 
