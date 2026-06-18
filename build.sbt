@@ -23,10 +23,10 @@ ThisBuild / scalacOptions ++= Seq(
 
 ThisBuild / compile / javacOptions ++= Seq(
   "-Xlint",
-  "--release=21"
+  "--release=23"
 ) ++ {
   val javaVersion = sys.props("java.specification.version").toFloat
-  assert(javaVersion.toInt >= 21, s"this build requires JDK21+ - you're using $javaVersion")
+  assert(javaVersion.toInt >= 23, s"this build requires JDK23+ - you're using $javaVersion")
   Nil
 }
 
