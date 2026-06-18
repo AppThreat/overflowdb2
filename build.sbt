@@ -1,7 +1,7 @@
 name := "overflowdb2"
 ThisBuild / organization := "io.appthreat"
-ThisBuild / version      := "2.2.1"
-ThisBuild / scalaVersion := "3.6.4"
+ThisBuild / version      := "3.0.0"
+ThisBuild / scalaVersion := "3.8.4"
 publish / skip := true
 
 lazy val core = project.in(file("core"))
