@@ -12,7 +12,7 @@ lazy val coreTests = project.in(file("core-tests")).dependsOn(formats, testdomai
 lazy val traversalTests = project.in(file("traversal-tests")).dependsOn(formats)
 
 ThisBuild / libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "3.2.19" % Test
+  "org.scalatest" %% "scalatest" % "3.2.20" % Test
 )
 
 ThisBuild / scalacOptions ++= Seq(
