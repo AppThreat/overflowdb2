@@ -131,4 +131,47 @@ public class OdbStorageTest {
     assertEquals(c, storage.reverseLookupStringToIntMapping(stringIdC));
   }
 
+  @Test
+  public void stringToIntMappingShouldBeConsistentUnderConcurrency() throws Exception {
+    OdbStorage storage = OdbStorage.createWithTempFile(stringInterner);
+
+    final int threadCount = 16;
+    final int keysPerThread = 500;
+    final java.util.List<String> keys = new java.util.ArrayList<>();
+    for (int i = 0; i < keysPerThread; i++) keys.add("key" + i);
+
+    final java.util.concurrent.ConcurrentHashMap<String, java.util.Set<Integer>> idsPerKey =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    final java.util.concurrent.ExecutorService pool =
+        java.util.concurrent.Executors.newFixedThreadPool(threadCount);
+    final java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+    final java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
+
+    for (int t = 0; t < threadCount; t++) {
+      futures.add(pool.submit(() -> {
+        try {
+          start.await();
+        } catch (InterruptedException e) {
+          throw new RuntimeException(e);
+        }
+        for (String key : keys) {
+          int id = storage.lookupOrCreateStringToIntMapping(key);
+          idsPerKey.computeIfAbsent(key, k -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(id);
+        }
+      }));
+    }
+    start.countDown();
+    for (java.util.concurrent.Future<?> f : futures) f.get();
+    pool.shutdown();
+
+    // each key must have been assigned exactly one id, even under concurrent first-time creation
+    for (String key : keys) {
+      assertEquals("key " + key + " must map to a single id", 1, idsPerKey.get(key).size());
+      int id = idsPerKey.get(key).iterator().next();
+      assertEquals(key, storage.reverseLookupStringToIntMapping(id));
+    }
+    assertEquals(keysPerThread, storage.getStringToIntMappings().size());
+    storage.close();
+  }
+
 }

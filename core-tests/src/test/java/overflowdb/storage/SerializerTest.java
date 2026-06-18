@@ -170,6 +170,34 @@ public class SerializerTest {
     assertEquals(-49l, edge1Deserialized.propertiesMap().get(longPropertyKey));
   }
 
+  @Test
+  public void serializePropertylessNodeAndEdge() throws IOException {
+    try (Graph graph = SimpleDomain.newGraph()) {
+      NodeSerializer serializer = new NodeSerializer(false, graph.getStorage());
+      NodeDeserializer deserializer = newDeserializer(graph);
+
+      // neither the nodes nor the edge carry any (non-default) properties
+      TestNode testNode1 = (TestNode) graph.addNode(TestNode.LABEL);
+      TestNode testNode2 = (TestNode) graph.addNode(TestNode.LABEL);
+      testNode1.addEdge(TestEdge.LABEL, testNode2);
+
+      Node n0Deserialized = deserializer.deserialize(serializer.serialize(testNode1.get()));
+      Node n1Deserialized = deserializer.deserialize(serializer.serialize(testNode2.get()));
+
+      // property-less nodes round-trip with nothing in their stored (non-default) properties
+      assertEquals(0, ((TestNodeDb) n0Deserialized).propertiesMapForStorage().size());
+      assertEquals(0, ((TestNodeDb) n1Deserialized).propertiesMapForStorage().size());
+
+      // the property-less edge still round-trips structurally in both directions
+      Edge edgeViaN0 = n0Deserialized.outE(TestEdge.LABEL).next();
+      Edge edgeViaN1 = n1Deserialized.inE(TestEdge.LABEL).next();
+      assertEquals(TestEdge.LABEL, edgeViaN0.label());
+      assertEquals(TestEdge.LABEL, edgeViaN1.label());
+      assertEquals(testNode1, edgeViaN0.outNode());
+      assertEquals(testNode2, edgeViaN0.inNode());
+    }
+  }
+
   private NodeDeserializer newDeserializer(Graph graph) {
     return new NodeDeserializer(
         graph,

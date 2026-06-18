@@ -37,6 +37,17 @@ public class OdbStorage implements AutoCloseable {
     private final AtomicInteger stringToIntMappingsMaxId = new AtomicInteger(0);
     private int libraryVersionsIdCurrentRun;
 
+    /* In-heap caches in front of the MVStore-backed string<->int glossary maps. The glossary is
+     * consulted once per property key, edge label and node label on every (de)serialization, so a
+     * direct MVStore lookup on each access dominates serialization time on large graphs. Schema-derived
+     * keys form a tiny, bounded set, so caching them on-heap is cheap and removes those lookups.
+     * The string->int cache additionally makes mapping creation atomic, preventing duplicate ids being
+     * assigned to the same string under concurrent serialization. */
+    private final java.util.concurrent.ConcurrentHashMap<String, Integer> stringToIntCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<Integer, String> intToStringCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     public static OdbStorage createWithTempFile(StringInterner stringInterner) {
         Config defaultConfig = Config.withDefaults();
         return new OdbStorage(Optional.empty(), stringInterner, defaultConfig);
@@ -178,15 +189,21 @@ public class OdbStorage implements AutoCloseable {
 
     public int lookupOrCreateStringToIntMapping(String s) {
         String interned = stringInterner.intern(s);
-        final MVMap<String, Integer> mappings = getStringToIntMappings();
-        Integer existing = mappings.get(interned);
-        return Objects.requireNonNullElseGet(existing, () -> createStringToIntMapping(interned));
+        /* computeIfAbsent runs the mapping function at most once per key, which both serves repeat
+         * lookups from the heap cache and guarantees a single id is created per string even when
+         * multiple threads race on a previously unseen string. */
+        return stringToIntCache.computeIfAbsent(interned, key -> {
+            final MVMap<String, Integer> mappings = getStringToIntMappings();
+            Integer existing = mappings.get(key);
+            return existing != null ? existing : createStringToIntMapping(key);
+        });
     }
 
     private int createStringToIntMapping(String s) {
         final int index = stringToIntMappingsMaxId.incrementAndGet();
         getStringToIntMappings().put(s, index);
         getIntToStringMappings().put(index, s);
+        intToStringCache.put(index, s);
         return index;
     }
 
@@ -200,9 +217,13 @@ public class OdbStorage implements AutoCloseable {
     }
 
     public String reverseLookupStringToIntMapping(int stringId) {
+        String cached = intToStringCache.get(stringId);
+        if (cached != null) return cached;
         String s = getIntToStringMappings().get(stringId);
         if (s == null) return null;
-        return stringInterner.intern(s);
+        String interned = stringInterner.intern(s);
+        intToStringCache.put(stringId, interned);
+        return interned;
     }
 
     private void ensureMVStoreAvailable() {

@@ -21,6 +21,11 @@ import java.util.List;
 import java.util.Map;
 
 public class NodeDeserializer extends BookKeeper {
+    /** Shared, immutable (zero-length) result for nodes and edges that have no stored properties.
+     * Property-less AST/CFG edges and nodes are the common case on large graphs, so reusing one
+     * empty array avoids millions of throwaway allocations on the deserialization hot path. */
+    private static final Object[] EMPTY_PROPERTIES = new Object[0];
+
     protected final Graph graph;
     private final Map<String, NodeFactory<?>> nodeFactoryByLabel;
     private final OdbStorage storage;
@@ -98,6 +103,7 @@ public class NodeDeserializer extends BookKeeper {
 
     private Object[] unpackProperties(MessageUnpacker unpacker) throws IOException {
         int propertyCount = unpacker.unpackMapHeader();
+        if (propertyCount == 0) return EMPTY_PROPERTIES;
         Object[] res = new Object[propertyCount * 2];
         int resIdx = 0;
         for (int propertyIdx = 0; propertyIdx < propertyCount; propertyIdx++) {
