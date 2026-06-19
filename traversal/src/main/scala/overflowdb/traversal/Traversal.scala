@@ -130,7 +130,41 @@ class TraversalSugarExt[A](val iter: Iterator[A]) extends AnyVal:
           elementType.runtimeClass,
           verbose = true
         )
+
+    /** Monitor the rate and time taken for elements to flow through this traversal step */
+    @Doc(info = "monitor the rate and time taken for elements to flow through this traversal step")
+    def profile(name: String): Traversal[A] =
+        new ProfileIterator[A](iter, name)
 end TraversalSugarExt
+
+class ProfileIterator[A](val underlying: Iterator[A], name: String) extends Iterator[A]:
+    private var count     = 0
+    private var totalNs   = 0L
+    private var isDone    = false
+    private var startTime = 0L
+
+    override def hasNext: Boolean =
+        if isDone then return false
+        if startTime == 0L then
+            startTime = System.nanoTime()
+        val start = System.nanoTime()
+        val hn    = underlying.hasNext
+        totalNs += (System.nanoTime() - start)
+        if !hn then
+            val totalMs = totalNs / 1000000.0
+            println(s"[Profile: $name] Completed in $totalMs ms, processed $count elements.")
+            isDone = true
+        hn
+
+    override def next(): A =
+        if startTime == 0L then
+            startTime = System.nanoTime()
+        val start = System.nanoTime()
+        val res   = underlying.next()
+        totalNs += (System.nanoTime() - start)
+        count += 1
+        res
+end ProfileIterator
 class TraversalFilterExt[A](val iterator: Iterator[A]) extends AnyVal:
     type Traversal[A] = Iterator[A]
 

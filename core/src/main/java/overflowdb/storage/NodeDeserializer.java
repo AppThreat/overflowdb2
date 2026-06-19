@@ -111,44 +111,96 @@ public class NodeDeserializer extends BookKeeper {
             Map<Integer, String> cache = stringCache.get();
             final String key = cache.computeIfAbsent(keyId,
                     storage::reverseLookupStringToIntMapping);
-            final ImmutableValue unpackedValue = unpacker.unpackValue();
-            final Object unpackedProperty = unpackValue(unpackedValue.asArrayValue());
+            final Object unpackedProperty = unpackDirectValue(unpacker);
             res[resIdx++] = key;
             res[resIdx++] = unpackedProperty;
         }
         return res;
     }
 
-    private Object unpackValue(final ArrayValue packedValueAndType) {
-        final Iterator<Value> iter = packedValueAndType.iterator();
-        final byte valueTypeId = iter.next().asIntegerValue().asByte();
-        final Value value = iter.next();
-
+    private Object unpackDirectValue(final MessageUnpacker unpacker) throws IOException {
+        unpacker.unpackArrayHeader(); // array structure is always size 2: [typeId, value]
+        final byte valueTypeId = unpacker.unpackByte();
         return switch (ValueTypes.lookup(valueTypeId)) {
-            case UNKNOWN -> null;
+            case UNKNOWN -> {
+                unpacker.unpackNil();
+                yield null;
+            }
             case NODE_REF -> {
-                long id = value.asIntegerValue().asLong();
+                long id = unpacker.unpackLong();
                 yield graph.node(id);
             }
-            case BOOLEAN -> value.asBooleanValue().getBoolean();
-            case STRING -> stringInterner.intern(value.asStringValue().asString());
-            case BYTE -> value.asIntegerValue().asByte();
-            case SHORT -> value.asIntegerValue().asShort();
-            case INTEGER -> value.asIntegerValue().asInt();
-            case LONG -> value.asIntegerValue().asLong();
-            case FLOAT -> value.asFloatValue().toFloat();
-            case DOUBLE -> value.asFloatValue().toDouble();
-            case LIST -> deserializeList(value.asArrayValue());
-            case CHARACTER -> (char) value.asIntegerValue().asInt();
-            case ARRAY_BYTE -> deserializeArrayByte(value.asArrayValue());
-            case ARRAY_SHORT -> deserializeArrayShort(value.asArrayValue());
-            case ARRAY_INT -> deserializeArrayInt(value.asArrayValue());
-            case ARRAY_LONG -> deserializeArrayLong(value.asArrayValue());
-            case ARRAY_FLOAT -> deserializeArrayFloat(value.asArrayValue());
-            case ARRAY_DOUBLE -> deserializeArrayDouble(value.asArrayValue());
-            case ARRAY_CHAR -> deserializeArrayChar(value.asArrayValue());
-            case ARRAY_BOOL -> deserializeArrayBoolean(value.asArrayValue());
-            case ARRAY_OBJECT -> deserializeArrayObject(value.asArrayValue());
+            case BOOLEAN -> unpacker.unpackBoolean();
+            case STRING -> stringInterner.intern(unpacker.unpackString());
+            case BYTE -> unpacker.unpackByte();
+            case SHORT -> unpacker.unpackShort();
+            case INTEGER -> unpacker.unpackInt();
+            case LONG -> unpacker.unpackLong();
+            case FLOAT -> unpacker.unpackFloat();
+            case DOUBLE -> unpacker.unpackDouble();
+            case LIST -> {
+                int size = unpacker.unpackArrayHeader();
+                final List<Object> deserializedList = new ArrayList<>(size);
+                for (int i = 0; i < size; i++) {
+                    deserializedList.add(unpackDirectValue(unpacker));
+                }
+                yield deserializedList;
+            }
+            case CHARACTER -> (char) unpacker.unpackInt();
+            case ARRAY_BYTE -> {
+                int size = unpacker.unpackArrayHeader();
+                byte[] arr = new byte[size];
+                for (int i = 0; i < size; i++) arr[i] = unpacker.unpackByte();
+                yield arr;
+            }
+            case ARRAY_SHORT -> {
+                int size = unpacker.unpackArrayHeader();
+                short[] arr = new short[size];
+                for (int i = 0; i < size; i++) arr[i] = unpacker.unpackShort();
+                yield arr;
+            }
+            case ARRAY_INT -> {
+                int size = unpacker.unpackArrayHeader();
+                int[] arr = new int[size];
+                for (int i = 0; i < size; i++) arr[i] = unpacker.unpackInt();
+                yield arr;
+            }
+            case ARRAY_LONG -> {
+                int size = unpacker.unpackArrayHeader();
+                long[] arr = new long[size];
+                for (int i = 0; i < size; i++) arr[i] = unpacker.unpackLong();
+                yield arr;
+            }
+            case ARRAY_FLOAT -> {
+                int size = unpacker.unpackArrayHeader();
+                float[] arr = new float[size];
+                for (int i = 0; i < size; i++) arr[i] = unpacker.unpackFloat();
+                yield arr;
+            }
+            case ARRAY_DOUBLE -> {
+                int size = unpacker.unpackArrayHeader();
+                double[] arr = new double[size];
+                for (int i = 0; i < size; i++) arr[i] = unpacker.unpackDouble();
+                yield arr;
+            }
+            case ARRAY_CHAR -> {
+                int size = unpacker.unpackArrayHeader();
+                char[] arr = new char[size];
+                for (int i = 0; i < size; i++) arr[i] = (char) unpacker.unpackInt();
+                yield arr;
+            }
+            case ARRAY_BOOL -> {
+                int size = unpacker.unpackArrayHeader();
+                boolean[] arr = new boolean[size];
+                for (int i = 0; i < size; i++) arr[i] = unpacker.unpackBoolean();
+                yield arr;
+            }
+            case ARRAY_OBJECT -> {
+                int size = unpacker.unpackArrayHeader();
+                Object[] arr = new Object[size];
+                for (int i = 0; i < size; i++) arr[i] = unpackDirectValue(unpacker);
+                yield arr;
+            }
         };
     }
 
@@ -161,59 +213,5 @@ public class NodeDeserializer extends BookKeeper {
             throw new AssertionError(String.format("nodeFactory not found for label=%s", label));
 
         return nodeFactoryByLabel.get(label);
-    }
-
-    private Object deserializeList(ArrayValue arrayValue) {
-        final List deserializedList = new ArrayList(arrayValue.size());
-        for (Value value : arrayValue) {
-            deserializedList.add(unpackValue(value.asArrayValue()));
-        }
-        return deserializedList;
-    }
-
-    private byte[] deserializeArrayByte(ArrayValue arrayValue) {
-        byte[] arr = new byte[arrayValue.size()];
-        int i = 0; for(Value v : arrayValue) arr[i++] = v.asIntegerValue().asByte();
-        return arr;
-    }
-    private short[] deserializeArrayShort(ArrayValue arrayValue) {
-        short[] arr = new short[arrayValue.size()];
-        int i = 0; for(Value v : arrayValue) arr[i++] = v.asIntegerValue().asShort();
-        return arr;
-    }
-    private int[] deserializeArrayInt(ArrayValue arrayValue) {
-        int[] arr = new int[arrayValue.size()];
-        int i = 0; for(Value v : arrayValue) arr[i++] = v.asIntegerValue().asInt();
-        return arr;
-    }
-    private long[] deserializeArrayLong(ArrayValue arrayValue) {
-        long[] arr = new long[arrayValue.size()];
-        int i = 0; for(Value v : arrayValue) arr[i++] = v.asIntegerValue().asLong();
-        return arr;
-    }
-    private float[] deserializeArrayFloat(ArrayValue arrayValue) {
-        float[] arr = new float[arrayValue.size()];
-        int i = 0; for(Value v : arrayValue) arr[i++] = v.asFloatValue().toFloat();
-        return arr;
-    }
-    private double[] deserializeArrayDouble(ArrayValue arrayValue) {
-        double[] arr = new double[arrayValue.size()];
-        int i = 0; for(Value v : arrayValue) arr[i++] = v.asFloatValue().toDouble();
-        return arr;
-    }
-    private char[] deserializeArrayChar(ArrayValue arrayValue) {
-        char[] arr = new char[arrayValue.size()];
-        int i = 0; for(Value v : arrayValue) arr[i++] = (char) v.asIntegerValue().asInt();
-        return arr;
-    }
-    private boolean[] deserializeArrayBoolean(ArrayValue arrayValue) {
-        boolean[] arr = new boolean[arrayValue.size()];
-        int i = 0; for(Value v : arrayValue) arr[i++] = v.asBooleanValue().getBoolean();
-        return arr;
-    }
-    private Object[] deserializeArrayObject(ArrayValue arrayValue) {
-        Object[] arr = new Object[arrayValue.size()];
-        int i = 0; for(Value v : arrayValue) arr[i++] = unpackValue(v.asArrayValue());
-        return arr;
     }
 }

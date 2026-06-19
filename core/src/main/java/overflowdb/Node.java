@@ -84,6 +84,9 @@ public abstract class Node extends Element implements NodeOrDetachedNode {
   /* adjacent OUT/IN edges for given labels */
   public abstract Iterator<Edge> bothE(String... edgeLabels);
 
+  public abstract boolean hasOut(String label);
+  public abstract boolean hasIn(String label);
+
   /*Allows fast initialization from detached node data*/
   protected void _initializeFromDetached(DetachedNodeData data, Function<DetachedNodeData, Node> mapper){
     throw new RuntimeException("Detached initialization is not supported by node type " + label() + " of class " + getClass().getName() );

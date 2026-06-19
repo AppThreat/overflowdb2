@@ -6,8 +6,9 @@ import overflowdb._
 import overflowdb.traversal.filter.P
 import overflowdb.traversal.testdomains.simple.Connection.Properties.Distance
 import overflowdb.traversal.testdomains.simple.Thing.Properties.Name
-import overflowdb.traversal.testdomains.simple.{Connection, ExampleGraphSetup, Thing}
+import overflowdb.traversal._
 import ChainedImplicitsTemp._
+import overflowdb.traversal.testdomains.simple.{Connection, ExampleGraphSetup, Thing}
 
 import scala.jdk.CollectionConverters.IteratorHasAsScala
 
@@ -168,6 +169,25 @@ class GenericGraphTraversalTests extends AnyWordSpec with ExampleGraphSetup {
       l2.start.bothE(Connection.Label).size shouldBe 2
       l2.start.bothE(nonExistingLabel, Connection.Label).size shouldBe 2
       l2.start.bothE(nonExistingLabel).size shouldBe 0
+    }
+
+    "step hasOut and hasIn" in {
+      graph.V.hasOut(Connection.Label).toSetMutable shouldBe Set(center, l1, l2, r1, r2, r3, r4)
+      graph.V.hasIn(Connection.Label).toSetMutable shouldBe Set(l1, l2, l3, r1, r2, r3, r4, r5)
+      graph.V.hasOut("nonexistent").size shouldBe 0
+      graph.V.hasIn("nonexistent").size shouldBe 0
+    }
+
+    "step neighborhood" in {
+      center.start.neighborhood(1, Direction.OUT).toSet shouldBe Set(center, l1, r1)
+      center.start.neighborhood(2, Direction.OUT).toSet shouldBe Set(center, l1, r1, l2, r2)
+      l2.start.neighborhood(1, Direction.IN).toSet shouldBe Set(l2, l1)
+      l2.start.neighborhood(2, Direction.BOTH).toSet shouldBe Set(l2, l1, l3, center)
+    }
+
+    "step profile" in {
+      val result = graph.V.asScala.profile("test-profile").toList
+      result.size shouldBe 9
     }
   }
 }

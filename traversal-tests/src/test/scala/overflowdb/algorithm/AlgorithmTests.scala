@@ -148,4 +148,123 @@ class AlgorithmTests extends AnyWordSpec {
             graph.close()
         }
     }
+
+    "DominatorTree" should {
+        "compute immediate dominators correctly" in {
+            val graph = SimpleDomain.newGraph
+            val a = graph.addNode("thing")
+            val b = graph.addNode("thing")
+            val c = graph.addNode("thing")
+            val d = graph.addNode("thing")
+
+            a.addEdge(Connection.Label, b)
+            a.addEdge(Connection.Label, c)
+            b.addEdge(Connection.Label, d)
+            c.addEdge(Connection.Label, d)
+
+            val idoms = DominatorTree.computeDominators(a, n => n.out(Connection.Label))
+            idoms.get(b.id()) shouldBe a.id()
+            idoms.get(c.id()) shouldBe a.id()
+            idoms.get(d.id()) shouldBe a.id()
+            graph.close()
+        }
+    }
+
+    "StronglyConnectedComponents" should {
+        "find cyclic components correctly" in {
+            val graph = SimpleDomain.newGraph
+            val a = graph.addNode("thing")
+            val b = graph.addNode("thing")
+            val c = graph.addNode("thing")
+
+            a.addEdge(Connection.Label, b)
+            b.addEdge(Connection.Label, c)
+            c.addEdge(Connection.Label, a) // Cycle A-B-C
+
+            val d = graph.addNode("thing")
+            c.addEdge(Connection.Label, d) // Node D outside the cycle
+
+            val nodes = java.util.Arrays.asList(a, b, c, d)
+            val sccs = StronglyConnectedComponents.compute(nodes, n => n.out(Connection.Label))
+            
+            sccs.size() shouldBe 2
+            
+            import scala.jdk.CollectionConverters._
+            val sccSets = sccs.asScala.map(_.asScala.toSet).toSet
+            sccSets should contain (Set(a, b, c))
+            sccSets should contain (Set(d))
+            
+            graph.close()
+        }
+    }
+
+    "ContextSensitivePathFinder" should {
+        "find valid paths and reject mismatched return contexts" in {
+            val graph = SimpleDomain.newGraph
+            val entry = graph.addNode("thing")
+            val call1 = graph.addNode("thing")
+            val body = graph.addNode("thing")
+            val ret1 = graph.addNode("thing")
+            val exit = graph.addNode("thing")
+
+            // Context edge definition helper
+            import ContextSensitivePathFinder.ContextEdge
+            import ContextSensitivePathFinder.ContextEdge.Type
+            import scala.jdk.CollectionConverters._
+
+            val getEdges: java.util.function.Function[Node, java.util.Iterator[ContextEdge]] = (n: Node) => {
+                val list = new ArrayList[ContextEdge]()
+                if (n == entry) {
+                    list.add(new ContextEdge(call1, Type.NEUTRAL, 0))
+                } else if (n == call1) {
+                    list.add(new ContextEdge(body, Type.OPEN, 101)) // Call site 101
+                } else if (n == body) {
+                    list.add(new ContextEdge(ret1, Type.CLOSE, 101)) // Return to call site 101
+                    list.add(new ContextEdge(exit, Type.CLOSE, 999)) // Mismatched return site
+                }
+                list.iterator()
+            }
+
+            val pathOpt = ContextSensitivePathFinder.findPath(entry, ret1, getEdges, 5)
+            pathOpt.isPresent shouldBe true
+            pathOpt.get().nodes.asScala shouldBe Seq(entry, call1, body, ret1)
+
+            val invalidPathOpt = ContextSensitivePathFinder.findPath(entry, exit, getEdges, 5)
+            invalidPathOpt.isPresent shouldBe false
+
+            graph.close()
+        }
+    }
+
+    "AsynchronousPrefetcher" should {
+        "preload cleared NodeRefs in background" in {
+            val graph = SimpleDomain.newGraph
+            val node = graph.addNode("thing").asInstanceOf[overflowdb.NodeRef[_]]
+            val prefetcher = new AsynchronousPrefetcher(2)
+            prefetcher.prefetch(java.util.Collections.singletonList(node.asInstanceOf[overflowdb.Node]))
+            prefetcher.shutdown()
+            node.isSet shouldBe true
+            graph.close()
+        }
+    }
+
+    "GnnExporter" should {
+        "export induced subgraph to flat primitive arrays" in {
+            val graph = SimpleDomain.newGraph
+            val a = graph.addNode("thing")
+            val b = graph.addNode("thing")
+            a.addEdge(Connection.Label, b)
+
+            val nodes = java.util.Arrays.asList(a, b)
+            val exporterResult = GnnExporter.exportGraph(nodes)
+
+            exporterResult.nodeIds should contain theSameElementsAs Array(a.id(), b.id())
+            exporterResult.nodeLabels should contain theSameElementsAs Array("thing", "thing")
+            exporterResult.edgeSrcIds shouldBe Array(a.id())
+            exporterResult.edgeDstIds shouldBe Array(b.id())
+            exporterResult.edgeLabels shouldBe Array(Connection.Label)
+
+            graph.close()
+        }
+    }
 }

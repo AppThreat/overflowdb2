@@ -295,6 +295,16 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
     return this.get().bothE(edgeLabels);
   }
 
+  @Override
+  public boolean hasOut(String label) {
+    return this.get().hasOut(label);
+  }
+
+  @Override
+  public boolean hasIn(String label) {
+    return this.get().hasIn(label);
+  }
+
   /*Allows fast initialization from detached node data*/
   @Override
   protected void _initializeFromDetached(DetachedNodeData data, Function<DetachedNodeData, Node> mapper){

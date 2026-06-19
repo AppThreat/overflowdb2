@@ -22,14 +22,17 @@ public class TopologicalSort {
         for (Node node : nodes) {
             long id = node.id();
             nodeById.put(id, node);
-            if (!inDegree.containsKey(id)) {
-                inDegree.put(id, 0);
-            }
+            inDegree.put(id, 0);
+        }
+
+        for (Node node : nodes) {
             Iterator<Node> successors = getSuccessors.apply(node);
             while (successors.hasNext()) {
                 Node successor = successors.next();
                 long succId = successor.id();
-                inDegree.adjustOrPutValue(succId, 1, 1);
+                if (nodeById.containsKey(succId)) {
+                    inDegree.put(succId, inDegree.get(succId) + 1);
+                }
             }
         }
 
