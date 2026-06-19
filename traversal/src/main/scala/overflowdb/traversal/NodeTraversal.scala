@@ -78,4 +78,46 @@ class NodeTraversal[E <: Node](val traversal: Iterator[E]) extends AnyVal:
     /** follow incoming and outgoing edges of given label */
     def bothE(labels: String*): Traversal[Edge] =
         traversal.flatMap(_.bothE(labels*).asScala)
+
+    /** Filter: keep nodes that have an outgoing edge with the given label */
+    @Doc(info = "keep nodes that have an outgoing edge with the given label")
+    def hasOut(label: String): Traversal[E] =
+        traversal.filter(_.hasOut(label))
+
+    /** Filter: keep nodes that have an incoming edge with the given label */
+    @Doc(info = "keep nodes that have an incoming edge with the given label")
+    def hasIn(label: String): Traversal[E] =
+        traversal.filter(_.hasIn(label))
+
+    /** Traverse to nodes reachable within `maxDepth` steps in the given direction */
+    @Doc(info = "traverse to nodes reachable within maxDepth steps in the given direction")
+    def neighborhood(
+      maxDepth: Int,
+      direction: overflowdb.Direction = overflowdb.Direction.BOTH
+    ): Traversal[Node] =
+        val visited      = scala.collection.mutable.LinkedHashSet.empty[Node]
+        var currentQueue = scala.collection.mutable.Queue.empty[Node]
+
+        traversal.foreach { node =>
+            if visited.add(node) then
+                currentQueue.enqueue(node)
+        }
+
+        var depth = 0
+        while depth < maxDepth && currentQueue.nonEmpty do
+            val nextQueue = scala.collection.mutable.Queue.empty[Node]
+            while currentQueue.nonEmpty do
+                val node = currentQueue.dequeue()
+                val adjacent = direction match
+                    case overflowdb.Direction.OUT  => node.out.asScala
+                    case overflowdb.Direction.IN   => node.in.asScala
+                    case overflowdb.Direction.BOTH => node.both.asScala
+                adjacent.foreach { adj =>
+                    if visited.add(adj) then
+                        nextQueue.enqueue(adj)
+                }
+            currentQueue = nextQueue
+            depth += 1
+        visited.iterator
+    end neighborhood
 end NodeTraversal

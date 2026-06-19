@@ -12,6 +12,7 @@ import java.util.NoSuchElementException;
  */
 public class HeapWalker implements Iterator<Node> {
     private final ArrayDeque<Node> stack = new ArrayDeque<>();
+    private final ArrayDeque<Node> childBuffer = new ArrayDeque<>();
     private final String[] edgeLabels;
 
     private Node nextNode;
@@ -43,7 +44,7 @@ public class HeapWalker implements Iterator<Node> {
         // Add children to stack
         // We iterate children and push them.
         Iterator<Node> children = nextNode.out(edgeLabels);
-        ArrayDeque<Node> childBuffer = new ArrayDeque<>();
+        childBuffer.clear();
         while(children.hasNext()) {
             childBuffer.push(children.next());
         }

@@ -418,6 +418,52 @@ public abstract class NodeDb extends Node {
     return multiIterator;
   }
 
+  @Override
+  public boolean hasOut(String label) {
+    int offsetPos = getPositionInEdgeOffsets(Direction.OUT, label);
+    if (offsetPos == -1) {
+      return false;
+    }
+    AdjacentNodes adjacentNodesTmp = this.adjacentNodes;
+    int start = startIndex(adjacentNodesTmp, offsetPos);
+    int length = blockLength(adjacentNodesTmp, offsetPos);
+    if (length == 0) {
+      return false;
+    }
+    int strideSize = getStrideSize(label);
+    int exclusiveEnd = start + length;
+    Object[] arr = adjacentNodesTmp.nodesWithEdgeProperties;
+    for (int i = start; i < arr.length && i < exclusiveEnd; i += strideSize) {
+      if (arr[i] != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @Override
+  public boolean hasIn(String label) {
+    int offsetPos = getPositionInEdgeOffsets(Direction.IN, label);
+    if (offsetPos == -1) {
+      return false;
+    }
+    AdjacentNodes adjacentNodesTmp = this.adjacentNodes;
+    int start = startIndex(adjacentNodesTmp, offsetPos);
+    int length = blockLength(adjacentNodesTmp, offsetPos);
+    if (length == 0) {
+      return false;
+    }
+    int strideSize = getStrideSize(label);
+    int exclusiveEnd = start + length;
+    Object[] arr = adjacentNodesTmp.nodesWithEdgeProperties;
+    for (int i = start; i < arr.length && i < exclusiveEnd; i += strideSize) {
+      if (arr[i] != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   protected int outEdgeCount() {
     int count = 0;
     AdjacentNodes adjacentNodesTmp = this.adjacentNodes;

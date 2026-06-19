@@ -1,14 +1,17 @@
 package overflowdb.algorithm;
 
 import gnu.trove.map.hash.TLongLongHashMap;
+import gnu.trove.map.hash.TLongIntHashMap;
 
 /**
  * A memory-efficient Union-Find (Disjoint Set Union) data structure backed by Trove primitives.
- * Uses Path Compression and Union by Rank (implicitly via path compression).
+ * Uses Path Compression and Union by Rank.
  */
 public class UnionFind {
     // Maps NodeID -> ParentID
     private final TLongLongHashMap parent;
+    // Maps NodeID -> Rank
+    private final TLongIntHashMap rank;
 
     public UnionFind() {
         this(100);
@@ -16,6 +19,7 @@ public class UnionFind {
 
     public UnionFind(int initialCapacity) {
         this.parent = new TLongLongHashMap(initialCapacity);
+        this.rank = new TLongIntHashMap(initialCapacity);
     }
 
     /**
@@ -24,26 +28,39 @@ public class UnionFind {
     public void makeSet(long nodeId) {
         if (!parent.containsKey(nodeId)) {
             parent.put(nodeId, nodeId);
+            rank.put(nodeId, 0);
         }
     }
 
     /**
      * Finds the representative (root) of the set containing nodeId.
-     * Performs path compression.
+     * Performs path compression iteratively.
      */
     public long find(long nodeId) {
         if (!parent.containsKey(nodeId)) {
             parent.put(nodeId, nodeId);
+            rank.put(nodeId, 0);
             return nodeId;
         }
 
-        long p = parent.get(nodeId);
-        if (p != nodeId) {
-            long root = find(p);
-            parent.put(nodeId, root);
-            return root;
+        long curr = nodeId;
+        long p = parent.get(curr);
+        while (p != curr) {
+            curr = p;
+            p = parent.get(curr);
         }
-        return p;
+        long root = curr;
+
+        // Path compression
+        curr = nodeId;
+        p = parent.get(curr);
+        while (p != root) {
+            parent.put(curr, root);
+            curr = p;
+            p = parent.get(curr);
+        }
+
+        return root;
     }
 
     /**
@@ -57,11 +74,23 @@ public class UnionFind {
         if (rootA == rootB) {
             return false;
         }
-        parent.put(rootB, rootA);
+
+        int rankA = rank.get(rootA);
+        int rankB = rank.get(rootB);
+
+        if (rankA < rankB) {
+            parent.put(rootA, rootB);
+        } else if (rankA > rankB) {
+            parent.put(rootB, rootA);
+        } else {
+            parent.put(rootB, rootA);
+            rank.put(rootA, rankA + 1);
+        }
         return true;
     }
 
     public void clear() {
         parent.clear();
+        rank.clear();
     }
 }

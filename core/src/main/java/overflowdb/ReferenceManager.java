@@ -3,6 +3,7 @@ package overflowdb;
 import overflowdb.storage.NodesWriter;
 import overflowdb.storage.OdbStorage;
 import overflowdb.util.NamedThreadFactory;
+import overflowdb.util.HeapUsageMonitor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +41,14 @@ public class ReferenceManager implements AutoCloseable {
     this.nodesWriter = nodesWriter;
     this.executorService = executorService;
     this.shutdownExecutorOnClose = shutdownExecutorOnClose;
+  }
+
+  public void triggerAsynchronousEviction() {
+    executorService.submit(() -> syncClearReferences(releaseCount));
+  }
+
+  public void installHeapUsageMonitor(int heapPercentageThreshold) {
+    HeapUsageMonitor.install(this, heapPercentageThreshold);
   }
 
   /* Register NodeRef, so it can be cleared on low memory */

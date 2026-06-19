@@ -18,6 +18,7 @@ public class Config {
     private static final int defaultPageSplitSize = 64 * 1024; // 64 KB
     private Optional<Integer> cacheSize = Optional.empty();
     private Optional<Integer> pageSplitSize = Optional.empty();
+    private StorageCompressionMode compressionMode = StorageCompressionMode.DEFLATE;
 
     public static Config withDefaults() {
         return new Config()
@@ -139,6 +140,15 @@ public class Config {
         return pageSplitSize;
     }
 
+    public Config withStorageCompressionMode(StorageCompressionMode compressionMode) {
+        this.compressionMode = compressionMode;
+        return this;
+    }
+
+    public StorageCompressionMode getStorageCompressionMode() {
+        return compressionMode;
+    }
+
     // Enum for file system types
     public enum FileSystemType {
         DEFAULT(""),
@@ -172,5 +182,11 @@ public class Config {
             }
             return effectivePrefix + path;
         }
+    }
+
+    public enum StorageCompressionMode {
+        NONE,
+        LZF,
+        DEFLATE
     }
 }

@@ -79,6 +79,7 @@ public final class Graph implements AutoCloseable {
             } else {
                 this.referenceManager = new ReferenceManager(storage, nodesWriter);
             }
+            this.referenceManager.installHeapUsageMonitor(config.getHeapPercentageThreshold());
         } else {
             this.referenceManager = null; // not using Optional only due to performance reasons - it's invoked *a lot*
         }

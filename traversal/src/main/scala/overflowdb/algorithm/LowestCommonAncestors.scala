@@ -18,15 +18,16 @@ object LowestCommonAncestors:
         if nodes.size <= 1 then
             nodes
         else
-            val (head, tail) = (nodes.head, nodes.tail)
-            val parentsIntersection = tail.foldLeft(parentsRecursive(head)) { case (res, next) =>
-                res.intersect(parentsRecursive(next))
-            }
+            val (head, tail)        = (nodes.head, nodes.tail)
+            var currentIntersection = parentsRecursive(head)
+            val iterator            = tail.iterator
+            while currentIntersection.nonEmpty && iterator.hasNext do
+                currentIntersection =
+                    currentIntersection.intersect(parentsRecursive(iterator.next()))
+            val parentsIntersection = currentIntersection
 
-            parentsIntersection.filter { node =>
-                val childCount = parentsIntersection.count(parentsRecursive(_).contains(node))
-                childCount == 0
-            }
+            val parentsRecursiveUnion = parentsIntersection.flatMap(parentsRecursive(_))
+            parentsIntersection.diff(parentsRecursiveUnion)
 
     def parentsRecursive[A: GetParents](node: A): Set[A] =
         parentsRecursive0(Set(node), Set.empty, Set.empty)
@@ -37,12 +38,13 @@ object LowestCommonAncestors:
       accumulator: Set[A],
       visited: Set[A]
     ): Set[A] =
-        if nodes.isEmpty || nodes.forall(visited.contains) then
+        val newNodes = nodes.diff(visited)
+        if newNodes.isEmpty then
             accumulator
         else
             val getParents      = implicitly[GetParents[A]]
-            val parents         = nodes.flatMap(getParents.apply)
+            val parents         = newNodes.flatMap(getParents.apply)
             val nextAccumulator = accumulator ++ parents
 
-            parentsRecursive0(parents, nextAccumulator, visited ++ nodes)
+            parentsRecursive0(parents, nextAccumulator, visited ++ newNodes)
 end LowestCommonAncestors
