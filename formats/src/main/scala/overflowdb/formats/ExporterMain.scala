@@ -1,6 +1,7 @@
 package overflowdb.formats
 
 import overflowdb.formats.dot.DotExporter
+import overflowdb.formats.gexf.GexfExporter
 import overflowdb.formats.graphml.GraphMLExporter
 import overflowdb.formats.graphson.GraphSONExporter
 import overflowdb.formats.neo4jcsv.Neo4jCsvExporter
@@ -41,6 +42,7 @@ object ExporterMain:
                     case Format.GraphML  => GraphMLExporter
                     case Format.GraphSON => GraphSONExporter
                     case Format.Dot      => DotExporter
+                    case Format.Gexf     => GexfExporter
                 val odbConfig = overflowdb.Config.withoutOverflow.withStorageLocation(inputFile)
                 val ExportResult(nodeCount, edgeCount, files, additionalInfo) =
                     Using.resource(Graph.open(

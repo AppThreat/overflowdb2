@@ -11,6 +11,7 @@ It operates as a hybrid in-memory/on-disk graph store. It attempts to keep the g
 - **Zero-Allocation Serialization:** Custom MsgPack-based serialization pipeline designed to eliminate GC pressure during disk I/O.
 - **Dynamic String Glossary Interning:** Dynamically maps all schema-defined labels, properties, and edge types during graph startup to minimize MVStore lookup/write overhead.
 - **Edge Property Fast-Paths:** Skips empty map metadata for property-less edges to achieve higher performance and lower storage footprints.
+- **Export Formats:** Built-in exporters for Neo4j CSV, GraphML, GraphSON, DOT, and GEXF (Graph Exchange XML Format) for easy import into visualization tools like Gephi.
 
 ## Architecture and Optimizations
 
@@ -39,7 +40,7 @@ Batch clearing of unloadable references uses a ConcurrentLinkedQueue instead of 
 resolvers += Resolver.githubPackages("appthreat/overflowdb2")
 
 libraryDependencies ++= Seq(
-  "io.appthreat" %% "overflowdb2-core" % "3.0.1"
+  "io.appthreat" %% "overflowdb2-core" % "3.0.2"
 )
 ```
 
@@ -188,6 +189,37 @@ List<String> differences = DiffTool.compare(graphA, graphB);
 if (!differences.isEmpty()) {
     differences.forEach(System.out::println);
 }
+```
+
+## Export Formats
+
+OverflowDB 2 supports exporting graphs into multiple formats via the `ExporterMain` CLI or programmatic exporter APIs:
+
+- **GEXF (Graph Exchange XML Format)**: Standard XML format designed for Gephi. Fully supports custom node/edge attributes mapped to standard Java/Scala property types (String, Integer, Long, Float, Double, Boolean).
+- **GraphML**: Standard XML serialization format for graph structures.
+- **GraphSON**: JSON-based serialization format for TinkerPop graphs.
+- **DOT**: Graphviz DOT format for layout and visualization.
+- **Neo4j CSV**: Group of CSV files suitable for bulk-importing into Neo4j.
+
+### CLI Usage
+
+The exporter can be invoked from the command line if the jar is on your classpath:
+
+```bash
+# Export to GEXF
+java -cp <classpath> overflowdb.formats.ExporterMain -f gexf -o /path/to/output /path/to/graph.bin
+```
+
+### Programmatic API
+
+You can export graphs directly in your code:
+
+```scala
+import overflowdb.formats.gexf.GexfExporter
+import java.nio.file.Paths
+
+// Export the graph to a GEXF file
+GexfExporter.runExport(graph, Paths.get("export.gexf"))
 ```
 
 ## Algorithms
