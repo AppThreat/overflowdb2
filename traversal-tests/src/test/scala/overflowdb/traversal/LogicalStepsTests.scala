@@ -62,7 +62,7 @@ class LogicalStepsTests extends AnyWordSpec with ExampleGraphSetup {
         .asScala
         .choose(_.property(Name)) {
           case "L1" => _.out // -> L2
-          case "R1" => _.repeat(_.out)(_.maxDepth(3)) // -> R4
+          case "R1" => _.repeat(_.out)(using _.maxDepth(3)) // -> R4
         }
         .property(Name)
         .toSetMutable shouldBe Set("L2", "R4")
@@ -74,7 +74,7 @@ class LogicalStepsTests extends AnyWordSpec with ExampleGraphSetup {
         .asScala
         .choose(_.property(Name)) {
           case "L1" => _.out // -> L2
-          case "R1" => _.repeat(_.out)(_.maxDepth(3)) // -> R4
+          case "R1" => _.repeat(_.out)(using _.maxDepth(3)) // -> R4
           case _    => _.in
         }
         .property(Name)

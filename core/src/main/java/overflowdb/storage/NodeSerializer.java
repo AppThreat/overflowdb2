@@ -38,10 +38,10 @@ public class NodeSerializer extends BookKeeper {
 
             packer.packLong(node.ref.id());
 
-            final int labelId = storage.lookupOrCreateStringToIntMapping(layoutInformation.label);
+            final int labelId = storage.lookupStringToInt(layoutInformation.label);
             packer.packInt(labelId);
 
-            packProperties(packer, node.propertiesMapForStorage());
+            packProperties(packer, node);
             packEdges(packer, node);
 
             if (statsEnabled) recordStatistics(startTimeNanos);
@@ -49,14 +49,25 @@ public class NodeSerializer extends BookKeeper {
         }
     }
 
-    private void packProperties(MessageBufferPacker packer, Map<String, Object> properties) throws IOException {
-        packer.packMapHeader(properties.size());
-        for (Map.Entry<String, Object> property : properties.entrySet()) {
-            int propertyKeyId = storage.lookupOrCreateStringToIntMapping(property.getKey());
-            packer.packInt(propertyKeyId);
-            Object value = property.getValue();
-            Object valueMaybeConverted = convertPropertyForPersistence == null ? value : convertPropertyForPersistence.apply(value);
-            packTypedValue(packer, valueMaybeConverted);
+    private void packProperties(MessageBufferPacker packer, NodeDb node) throws IOException {
+        Set<String> propertyKeys = node.propertyKeys();
+        int nonDefaultPropertyCount = 0;
+        for (String propertyKey : propertyKeys) {
+            Object value = node.property(propertyKey);
+            if (value != null && !value.equals(node.propertyDefaultValue(propertyKey))) {
+                nonDefaultPropertyCount++;
+            }
+        }
+
+        packer.packMapHeader(nonDefaultPropertyCount);
+        for (String propertyKey : propertyKeys) {
+            Object value = node.property(propertyKey);
+            if (value != null && !value.equals(node.propertyDefaultValue(propertyKey))) {
+                int propertyKeyId = storage.lookupStringToInt(propertyKey);
+                packer.packInt(propertyKeyId);
+                Object valueMaybeConverted = convertPropertyForPersistence == null ? value : convertPropertyForPersistence.apply(value);
+                packTypedValue(packer, valueMaybeConverted);
+            }
         }
     }
 
@@ -110,7 +121,7 @@ public class NodeSerializer extends BookKeeper {
             currIdx += strideSize;
         }
 
-        int labelId = storage.lookupOrCreateStringToIntMapping(edgeLabel);
+        int labelId = storage.lookupStringToInt(edgeLabel);
         packer.packInt(labelId);
         packer.packInt(edgeCount);
 
@@ -119,14 +130,16 @@ public class NodeSerializer extends BookKeeper {
             Node adjacentNode = (Node) adjacentNodesWithEdgeProperties[currIdx];
             if (adjacentNode != null) {
                 packer.packLong(adjacentNode.id());
-                packer.packMapHeader(edgePropertyNames.size());
-                for (String propertyName : edgePropertyNames) {
-                    int propertyKeyId = storage.lookupOrCreateStringToIntMapping(propertyName);
-                    packer.packInt(propertyKeyId);
-                    int edgePropertyOffset = layoutInformation.getEdgePropertyOffsetRelativeToAdjacentNodeRef(edgeLabel, propertyName);
-                    Object property = adjacentNodesWithEdgeProperties[currIdx + edgePropertyOffset];
-                    Object valueMaybeConverted = convertPropertyForPersistence == null ? property : convertPropertyForPersistence.apply(property);
-                    packTypedValue(packer, valueMaybeConverted);
+                if (edgePropertyNames != null && !edgePropertyNames.isEmpty()) {
+                    packer.packMapHeader(edgePropertyNames.size());
+                    for (String propertyName : edgePropertyNames) {
+                        int propertyKeyId = storage.lookupStringToInt(propertyName);
+                        packer.packInt(propertyKeyId);
+                        int edgePropertyOffset = layoutInformation.getEdgePropertyOffsetRelativeToAdjacentNodeRef(edgeLabel, propertyName);
+                        Object property = adjacentNodesWithEdgeProperties[currIdx + edgePropertyOffset];
+                        Object valueMaybeConverted = convertPropertyForPersistence == null ? property : convertPropertyForPersistence.apply(property);
+                        packTypedValue(packer, valueMaybeConverted);
+                    }
                 }
             }
             currIdx += strideSize;

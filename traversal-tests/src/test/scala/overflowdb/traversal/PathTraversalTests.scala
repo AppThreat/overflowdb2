@@ -169,7 +169,7 @@ class PathTraversalTests extends AnyWordSpec with ExampleGraphSetup {
                     .enablePathTracking
                     .choose(_.property(Name)) {
                         case "L1" => _.out // -> L2
-                        case "R1" => _.repeat(_.out)(_.maxDepth(3)) // -> R4
+                        case "R1" => _.repeat(_.out)(using _.maxDepth(3)) // -> R4
                     }
                     .property(Name)
                     .path

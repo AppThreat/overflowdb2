@@ -239,7 +239,7 @@ class AlgorithmTests extends AnyWordSpec {
     "AsynchronousPrefetcher" should {
         "preload cleared NodeRefs in background" in {
             val graph = SimpleDomain.newGraph
-            val node = graph.addNode("thing").asInstanceOf[overflowdb.NodeRef[_]]
+            val node = graph.addNode("thing").asInstanceOf[overflowdb.NodeRef[?]]
             val prefetcher = new AsynchronousPrefetcher(2)
             prefetcher.prefetch(java.util.Collections.singletonList(node.asInstanceOf[overflowdb.Node]))
             prefetcher.shutdown()

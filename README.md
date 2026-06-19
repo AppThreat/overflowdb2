@@ -9,6 +9,8 @@ It operates as a hybrid in-memory/on-disk graph store. It attempts to keep the g
 - **Hybrid Storage Model:** Seamlessly transitions between `NodeRef` (lightweight pointer, <32 bytes) and `NodeDb` (full property container) based on memory pressure.
 - **Schema-Aware Compression:** Optimized specifically for graph domains where edge labels and property keys are repetitive (common in ASTs).
 - **Zero-Allocation Serialization:** Custom MsgPack-based serialization pipeline designed to eliminate GC pressure during disk I/O.
+- **Dynamic String Glossary Interning:** Dynamically maps all schema-defined labels, properties, and edge types during graph startup to minimize MVStore lookup/write overhead.
+- **Edge Property Fast-Paths:** Skips empty map metadata for property-less edges to achieve higher performance and lower storage footprints.
 
 ## Architecture and Optimizations
 
@@ -16,11 +18,13 @@ This library has undergone rigorous optimization to support massive graphs on st
 
 ### 1. Storage and Memory Management
 
-ASTs contain millions of repetitive strings. To address this, overflowdb2 uses a bi-directional index backed by H2 MVStore. String to integer mapping happens in memory, but integer to string mappings are offloaded to disk. Guava weak interning is used for string properties, allowing the garbage collector to reclaim memory when nodes are unloaded. An automatic GC-based memory monitor runs in the background and triggers asynchronous eviction of nodes to disk when heap usage after a collection cycle exceeds the configured threshold.
+ASTs contain millions of repetitive strings. To address this, overflowdb2 uses a bi-directional index backed by H2 MVStore. String to integer mapping happens in memory, but integer to string mappings are offloaded to disk. String interning is used for string properties, allowing the garbage collector to reclaim memory when nodes are unloaded. An automatic GC-based memory monitor runs in the background and triggers asynchronous eviction of nodes to disk when heap usage after a collection cycle exceeds the configured threshold.
+
+At startup, the schema's labels, properties, and edge keys are dynamically scanned and registered with the storage glossary ("Glossary Pre-initialization"). This avoids runtime write contention and lookup overheads on backing MVStore glossary maps.
 
 ### 2. Zero-Allocation Serialization and Deserialization
 
-To eliminate garbage collector overhead, the serialization pipeline uses a two-pass write strategy that writes data directly to the message buffer. The deserialization pipeline is also optimized to extract values directly from the unpacker stream, which bypasses the creation of intermediate MsgPack wrapper objects. All packaging logic utilizes primitive streams to eliminate object boxing.
+To eliminate garbage collector overhead, the serialization pipeline uses a two-pass write strategy that writes data directly to the message buffer. The deserialization pipeline is also optimized to extract values directly from the unpacker stream, which bypasses the creation of intermediate MsgPack wrapper objects. All packaging logic utilizes primitive streams to eliminate object boxing, and node property packing avoids intermediate map allocations.
 
 ### 3. Data Structures and Algorithms
 
@@ -35,7 +39,7 @@ Batch clearing of unloadable references uses a ConcurrentLinkedQueue instead of 
 resolvers += Resolver.githubPackages("appthreat/overflowdb2")
 
 libraryDependencies ++= Seq(
-  "io.appthreat" %% "overflowdb2-core" % "3.0.0"
+  "io.appthreat" %% "overflowdb2-core" % "3.0.1"
 )
 ```
 

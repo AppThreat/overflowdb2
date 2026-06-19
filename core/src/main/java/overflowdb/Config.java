@@ -19,6 +19,8 @@ public class Config {
     private Optional<Integer> cacheSize = Optional.empty();
     private Optional<Integer> pageSplitSize = Optional.empty();
     private StorageCompressionMode compressionMode = StorageCompressionMode.DEFLATE;
+    private boolean glossaryPreinitEnabled = true;
+
 
     public static Config withDefaults() {
         return new Config()
@@ -148,6 +150,16 @@ public class Config {
     public StorageCompressionMode getStorageCompressionMode() {
         return compressionMode;
     }
+
+    public Config withGlossaryPreinitEnabled(boolean enabled) {
+        this.glossaryPreinitEnabled = enabled;
+        return this;
+    }
+
+    public boolean isGlossaryPreinitEnabled() {
+        return glossaryPreinitEnabled;
+    }
+
 
     // Enum for file system types
     public enum FileSystemType {
