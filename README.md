@@ -9,7 +9,6 @@ It operates as a hybrid in-memory/on-disk graph store. It attempts to keep the g
 - **Hybrid Storage Model:** Seamlessly transitions between `NodeRef` (lightweight pointer, <32 bytes) and `NodeDb` (full property container) based on memory pressure.
 - **Schema-Aware Compression:** Optimized specifically for graph domains where edge labels and property keys are repetitive (common in ASTs).
 - **Zero-Allocation Serialization:** Custom MsgPack-based serialization pipeline designed to eliminate GC pressure during disk I/O.
-- **Strictly Typed:** Java 21+ / Scala 3.6+ support.
 
 ## Architecture and Optimizations
 
@@ -29,14 +28,14 @@ Batch clearing of unloadable references uses a ConcurrentLinkedQueue instead of 
 
 ## Installation
 
-**Requirements:** JDK 21+
+**Requirements:** JDK 23+
 
 ```scala
 // build.sbt
 resolvers += Resolver.githubPackages("appthreat/overflowdb2")
 
 libraryDependencies ++= Seq(
-  "io.appthreat" %% "overflowdb2-core" % "2.2.1"
+  "io.appthreat" %% "overflowdb2-core" % "3.0.0"
 )
 ```
 
