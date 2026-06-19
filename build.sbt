@@ -1,6 +1,6 @@
 name := "overflowdb2"
 ThisBuild / organization := "io.appthreat"
-ThisBuild / version      := "3.0.0"
+ThisBuild / version      := "3.0.1"
 ThisBuild / scalaVersion := "3.8.4"
 publish / skip := true
 
@@ -17,7 +17,7 @@ ThisBuild / libraryDependencies ++= Seq(
 
 ThisBuild / scalacOptions ++= Seq(
   "-release",
-  "21",
+  "23",
   "-deprecation"
 )
 

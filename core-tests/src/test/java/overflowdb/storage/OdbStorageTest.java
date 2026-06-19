@@ -174,4 +174,32 @@ public class OdbStorageTest {
     storage.close();
   }
 
+  @Test
+  public void testGlossaryPreinitialization() throws IOException {
+    final File storageFile = Files.createTempFile("overflowdb-preinit", "bin").toFile();
+    storageFile.deleteOnExit();
+
+    // 1. With pre-initialization enabled (default)
+    Config configPre = Config.withDefaults().withStorageLocation(storageFile.getAbsolutePath()).withGlossaryPreinitEnabled(true);
+    try (Graph graph = GratefulDead.newGraph(configPre)) {
+      // The glossary should already contain the Song label and other schema strings
+      OdbStorage storage = graph.getStorage();
+      int songLabelId = storage.lookupStringToInt(Song.label);
+      org.junit.Assert.assertTrue("Glossary should pre-initialize Song label", songLabelId > 0);
+    }
+
+    // Clean up
+    storageFile.delete();
+
+    // 2. With pre-initialization disabled
+    Config configNoPre = Config.withDefaults().withStorageLocation(storageFile.getAbsolutePath()).withGlossaryPreinitEnabled(false);
+    try (Graph graph = GratefulDead.newGraph(configNoPre)) {
+      OdbStorage storage = graph.getStorage();
+      // Since it's a new empty storage and preinit is disabled, the internal map should be empty or not contain schema strings yet
+      int count = storage.getStringToIntMappings().size();
+      assertEquals("Glossary should be empty when pre-initialization is disabled", 0, count);
+    }
+  }
+
 }
+

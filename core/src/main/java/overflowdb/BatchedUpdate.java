@@ -4,6 +4,10 @@ import overflowdb.util.IteratorUtils;
 
 import java.util.ArrayDeque;
 import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 public class BatchedUpdate {
 
@@ -15,6 +19,114 @@ public class BatchedUpdate {
 
     public static AppliedDiff applyDiff(Graph graph, DiffOrBuilder diff, KeyPool keyPool, ModificationListener listener) {
         return new DiffGraphApplier(graph, diff, keyPool, listener).run();
+    }
+
+    public static AppliedDiff applyFragment(Graph graph, byte[] fragmentBytes, long expectedSchemaHash, BoundaryResolver boundaryResolver, KeyPool keyPool) {
+        return applyFragment(graph, fragmentBytes, expectedSchemaHash, boundaryResolver, keyPool, null);
+    }
+
+    public static AppliedDiff applyFragment(Graph graph, byte[] fragmentBytes, long expectedSchemaHash, BoundaryResolver boundaryResolver, KeyPool keyPool, ModificationListener listener) {
+        overflowdb.storage.GraphFragmentCodec.FragmentHeader header = overflowdb.storage.GraphFragmentCodec.peek(fragmentBytes);
+        if (header.schemaHash != expectedSchemaHash) {
+            throw new IllegalArgumentException("Schema hash mismatch: fragment schema hash is " + header.schemaHash + ", expected " + expectedSchemaHash);
+        }
+
+        overflowdb.storage.DecodedFragment decoded = overflowdb.storage.GraphFragmentCodec.decode(fragmentBytes);
+
+        Node[] localToGlobalNode = new Node[decoded.nodes.size()];
+        DetachedNodeGeneric[] detachedNodes = new DetachedNodeGeneric[decoded.nodes.size()];
+
+        for (int i = 0; i < decoded.nodes.size(); i++) {
+            overflowdb.storage.DecodedFragment.DecodedNode dNode = decoded.nodes.get(i);
+            Node liveNode;
+            if (keyPool == null) {
+                liveNode = graph.addNode(dNode.label);
+            } else {
+                liveNode = graph.addNode(keyPool.next(), dNode.label);
+            }
+            localToGlobalNode[i] = liveNode;
+        }
+
+        for (int i = 0; i < decoded.nodes.size(); i++) {
+            overflowdb.storage.DecodedFragment.DecodedNode dNode = decoded.nodes.get(i);
+            Object[] keyvalues = new Object[dNode.properties.size() * 2];
+            int kvIdx = 0;
+            for (Map.Entry<String, Object> entry : dNode.properties.entrySet()) {
+                keyvalues[kvIdx++] = entry.getKey();
+                keyvalues[kvIdx++] = remapProperty(entry.getValue(), localToGlobalNode);
+            }
+            DetachedNodeGeneric detachedNode = new DetachedNodeGeneric(dNode.label, keyvalues);
+            detachedNode.setRefOrId(localToGlobalNode[i]);
+            detachedNodes[i] = detachedNode;
+        }
+
+        // Manually initialize the pre-allocated nodes to set properties
+        for (int i = 0; i < localToGlobalNode.length; i++) {
+            Node liveNode = localToGlobalNode[i];
+            DetachedNodeGeneric detachedNode = detachedNodes[i];
+            Node.initializeFromDetached(liveNode, detachedNode, (dn) -> {
+                for (int j = 0; j < detachedNodes.length; j++) {
+                    if (detachedNodes[j] == dn) {
+                        return localToGlobalNode[j];
+                    }
+                }
+                return null;
+            });
+            if (listener != null) {
+                listener.onAfterInitNewNode(liveNode);
+            }
+        }
+
+        List<Change> changes = new ArrayList<>();
+
+        for (DetachedNodeGeneric dn : detachedNodes) {
+            changes.add(dn);
+        }
+
+        for (overflowdb.storage.DecodedFragment.DecodedEdge dEdge : decoded.edges) {
+            DetachedNodeGeneric src = detachedNodes[dEdge.srcLocal];
+            DetachedNodeGeneric dst = detachedNodes[dEdge.dstLocal];
+            Object[] properties = new Object[dEdge.properties.size() * 2];
+            int kvIdx = 0;
+            for (Map.Entry<String, Object> entry : dEdge.properties.entrySet()) {
+                properties[kvIdx++] = entry.getKey();
+                properties[kvIdx++] = remapProperty(entry.getValue(), localToGlobalNode);
+            }
+            changes.add(new CreateEdge(dEdge.label, src, dst, properties));
+        }
+
+        for (overflowdb.storage.DecodedFragment.DecodedBoundaryRef dRef : decoded.boundaryRefs) {
+            DetachedNodeGeneric src = detachedNodes[dRef.srcLocal];
+            Optional<Node> resolvedDstOpt = boundaryResolver.resolve(dRef.key);
+            if (resolvedDstOpt != null && resolvedDstOpt.isPresent()) {
+                Node resolvedDst = resolvedDstOpt.get();
+                changes.add(new CreateEdge(dRef.label, src, resolvedDst, null));
+            }
+        }
+
+        DiffGraph diff = new DiffGraph(changes.toArray(new Change[0]));
+        return applyDiff(graph, diff, keyPool, listener);
+    }
+
+    private static Object remapProperty(Object value, Node[] localToGlobalNode) {
+        if (value instanceof overflowdb.storage.LocalNodeRef) {
+            return localToGlobalNode[((overflowdb.storage.LocalNodeRef) value).localId];
+        } else if (value instanceof List) {
+            List<?> list = (List<?>) value;
+            List<Object> copy = new ArrayList<>(list.size());
+            for (Object o : list) {
+                copy.add(remapProperty(o, localToGlobalNode));
+            }
+            return copy;
+        } else if (value instanceof Object[]) {
+            Object[] arr = (Object[]) value;
+            Object[] copy = new Object[arr.length];
+            for (int i = 0; i < arr.length; i++) {
+                copy[i] = remapProperty(arr[i], localToGlobalNode);
+            }
+            return copy;
+        }
+        return value;
     }
 
     public interface KeyPool {

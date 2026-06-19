@@ -67,6 +67,19 @@ public final class Graph implements AutoCloseable {
         this.storage = config.getStorageLocation().isPresent()
                 ? OdbStorage.createWithSpecificLocation(config.getStorageLocation().get().toFile(), stringInterner, config)
                 : OdbStorage.createWithTempFile(stringInterner, config);
+
+        // Pre-initialize string mappings from schema dynamically
+        if (config.isGlossaryPreinitEnabled()) {
+            Set<String> schemaStrings = new HashSet<>();
+            nodeFactoryByLabel.forEach((label, factory) -> {
+                schemaStrings.add(label);
+                extractSchemaStrings(factory, schemaStrings);
+            });
+            edgeFactoryByLabel.keySet().forEach(schemaStrings::add);
+            this.storage.preInitializeGlossary(schemaStrings);
+        }
+
+
         this.nodeDeserializer = new NodeDeserializer(this, nodeFactoryByLabel, config.isSerializationStatsEnabled(), storage);
         this.nodeSerializer = new NodeSerializer(config.isSerializationStatsEnabled(), storage, convertPropertyForPersistence);
         this.nodesWriter = new NodesWriter(nodeSerializer, storage);
@@ -82,6 +95,37 @@ public final class Graph implements AutoCloseable {
             this.referenceManager.installHeapUsageMonitor(config.getHeapPercentageThreshold());
         } else {
             this.referenceManager = null; // not using Optional only due to performance reasons - it's invoked *a lot*
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void extractSchemaStrings(NodeFactory<?> factory, Set<String> schemaStrings) {
+        try {
+            NodeRef<?> ref = factory.createNodeRef(this, -1L);
+            NodeDb node = ((NodeFactory<NodeDb>) factory).createNode((NodeRef<NodeDb>) ref);
+            NodeLayoutInformation layout = node.layoutInformation();
+
+            if (layout != null) {
+                if (layout.propertyKeys() != null) {
+                    schemaStrings.addAll(layout.propertyKeys());
+                }
+                for (String outLabel : layout.allowedOutEdgeLabels()) {
+                    schemaStrings.add(outLabel);
+                    Set<String> epk = layout.edgePropertyKeys(outLabel);
+                    if (epk != null) {
+                        schemaStrings.addAll(epk);
+                    }
+                }
+                for (String inLabel : layout.allowedInEdgeLabels()) {
+                    schemaStrings.add(inLabel);
+                    Set<String> epk = layout.edgePropertyKeys(inLabel);
+                    if (epk != null) {
+                        schemaStrings.addAll(epk);
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            // Ignore if layout cannot be queried
         }
     }
 
@@ -376,7 +420,8 @@ public final class Graph implements AutoCloseable {
         if (destination.nodeCount() > 0) throw new AssertionError("destination graph must be empty, but isn't");
         nodes().forEachRemaining(node -> destination.addNode(node.id(), node.label(), PropertyHelper.toKeyValueArray(node.propertiesMap())));
         nodes().forEachRemaining( node -> {
-            NodeDb mapped =  ((NodeRef<NodeDb>) destination.node(node.id())).get();
+            NodeRef<?> destNode = (NodeRef<?>) destination.node(node.id());
+            NodeDb mapped = destNode.get();
 
             node.outE().forEachRemaining(edge -> {
                 NodeRef<?> other = (NodeRef<?>) destination.node(edge.inNode().id());

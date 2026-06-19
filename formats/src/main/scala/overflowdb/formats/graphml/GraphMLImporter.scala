@@ -70,7 +70,7 @@ object GraphMLImporter extends Importer:
         for
             id    <- id.toLongOption
             label <- label
-        do graph.addNode(id, label, keyValuePairs.result*)
+        do graph.addNode(id, label, keyValuePairs.result()*)
     end addNode
 
     private def addEdge(
@@ -101,7 +101,7 @@ object GraphMLImporter extends Importer:
             targetId <- targetId.toLongOption
             target   <- Option(graph.node(targetId))
             label    <- label
-        do source.addEdge(label, target, keyValuePairs.result*)
+        do source.addEdge(label, target, keyValuePairs.result()*)
     end addEdge
 
     private def convertValue(stringValue: String, tpe: Type.Value, context: scala.xml.Node): Any =

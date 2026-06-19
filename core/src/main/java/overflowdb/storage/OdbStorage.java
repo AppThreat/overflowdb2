@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 public class OdbStorage implements AutoCloseable {
     /** increase this number when persistence format changes (usually driven by changes in the NodeSerializer)
      * this protects us from attempting to open outdated formats */
-    public static final int STORAGE_FORMAT_VERSION = 2;
+    public static final int STORAGE_FORMAT_VERSION = 3;
 
     public static final String METADATA_KEY_STORAGE_FORMAT_VERSION = "STORAGE_FORMAT_VERSION";
     public static final String METADATA_KEY_STRING_TO_INT_MAX_ID = "STRING_TO_INT_MAX_ID";
@@ -36,6 +36,7 @@ public class OdbStorage implements AutoCloseable {
     private boolean closed;
     private final AtomicInteger stringToIntMappingsMaxId = new AtomicInteger(0);
     private int libraryVersionsIdCurrentRun;
+    private final boolean isTemporary;
 
     /* In-heap caches in front of the MVStore-backed string<->int glossary maps. The glossary is
      * consulted once per property key, edge label and node label on every (de)serialization, so a
@@ -79,6 +80,7 @@ public class OdbStorage implements AutoCloseable {
     private OdbStorage(final Optional<File> mvstoreFileMaybe, StringInterner stringInterner, Config config) {
         this.config = config;
         this.stringInterner = stringInterner;
+        this.isTemporary = !mvstoreFileMaybe.isPresent();
         if (mvstoreFileMaybe.isPresent()) {
             mvstoreFile = mvstoreFileMaybe.get();
             if (mvstoreFile.exists() && mvstoreFile.length() > 0) {
@@ -144,6 +146,9 @@ public class OdbStorage implements AutoCloseable {
         closed = true;
         flush();
         if (mvstore != null) mvstore.close();
+        if (isTemporary && mvstoreFile != null && mvstoreFile.exists()) {
+            mvstoreFile.delete();
+        }
     }
 
     public File getStorageFile() {
@@ -197,6 +202,22 @@ public class OdbStorage implements AutoCloseable {
             Integer existing = mappings.get(key);
             return existing != null ? existing : createStringToIntMapping(key);
         });
+    }
+
+    public void preInitializeGlossary(Set<String> strings) {
+        for (String s : strings) {
+            if (s != null) {
+                lookupOrCreateStringToIntMapping(s);
+            }
+        }
+    }
+
+    public int lookupStringToInt(String s) {
+        Integer id = stringToIntCache.get(s);
+        if (id != null) {
+            return id;
+        }
+        return lookupOrCreateStringToIntMapping(s);
     }
 
     private int createStringToIntMapping(String s) {

@@ -10,6 +10,7 @@ import overflowdb.Graph;
 import overflowdb.NodeDb;
 import overflowdb.NodeFactory;
 import overflowdb.NodeRef;
+import overflowdb.NodeLayoutInformation;
 import overflowdb.util.PropertyHelper;
 import overflowdb.util.StringInterner;
 
@@ -19,6 +20,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class NodeDeserializer extends BookKeeper {
     /** Shared, immutable (zero-length) result for nodes and edges that have no stored properties.
@@ -80,13 +82,23 @@ public class NodeDeserializer extends BookKeeper {
             String edgeLabel = cache.computeIfAbsent(edgeLabelId,
                     storage::reverseLookupStringToIntMapping);
             int edgeCount = unpacker.unpackInt();
+            boolean hasProperties = hasEdgeProperties(node, edgeLabel);
             for (int edgeIdx = 0; edgeIdx < edgeCount; edgeIdx++) {
                 long adjacentNodeId = unpacker.unpackLong();
                 NodeRef<?> adjacentNode = (NodeRef) graph.node(adjacentNodeId);
-                Object[] edgeProperties = unpackProperties(unpacker);
+                Object[] edgeProperties = hasProperties ? unpackProperties(unpacker) : EMPTY_PROPERTIES;
                 node.storeAdjacentNode(direction, edgeLabel, adjacentNode, edgeProperties);
             }
         }
+    }
+
+    private boolean hasEdgeProperties(NodeDb node, String edgeLabel) {
+        NodeLayoutInformation layout = node.layoutInformation();
+        if (layout != null) {
+            Set<String> keys = layout.edgePropertyKeys(edgeLabel);
+            return keys != null && !keys.isEmpty();
+        }
+        return false;
     }
 
     /**
