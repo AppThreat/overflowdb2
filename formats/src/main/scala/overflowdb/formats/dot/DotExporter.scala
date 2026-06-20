@@ -6,36 +6,50 @@ import overflowdb.{Edge, Graph, Node}
 import java.io.BufferedWriter
 import java.nio.file.{Files, Path}
 import scala.util.Using
-import scala.jdk.CollectionConverters.IterableHasAsScala
+import scala.jdk.CollectionConverters.{IterableHasAsScala, IteratorHasAsScala}
 
 object DotExporter extends Exporter:
     override def defaultFileExtension = "dot"
 
     override def runExport(graph: Graph, outputFile: Path): ExportResult =
+        write(graph.nodes().asScala, graph.edges().asScala, outputFile)
+
+    /** Subgraph entry point: export only the given nodes and edges. The caller is responsible for
+      * supplying a self-contained selection (edges whose endpoints are part of the node set).
+      */
+    override def runExport(
+      nodes: IterableOnce[Node],
+      edges: IterableOnce[Edge],
+      outputFile: Path
+    ): ExportResult =
+        write(nodes.iterator, edges.iterator, outputFile)
+
+    private def write(
+      nodes: Iterator[Node],
+      edges: Iterator[Edge],
+      outputFile: Path
+    ): ExportResult =
         val outFile = resolveOutputFileSingle(outputFile, s"export.$defaultFileExtension")
         var nodeCount, edgeCount = 0
 
         Using.resource(Files.newBufferedWriter(outFile)) { writer =>
             writer.write("digraph {"); writer.newLine()
 
-            val nodeIter = graph.nodes()
-            while nodeIter.hasNext do
-                val node = nodeIter.next()
+            nodes.foreach { node =>
                 nodeCount += 1
                 writeNode(writer, node)
-
-            val edgeIter = graph.edges()
-            while edgeIter.hasNext do
-                val edge = edgeIter.next()
+            }
+            edges.foreach { edge =>
                 edgeCount += 1
                 writeEdge(writer, edge)
+            }
 
             writer.write("}")
             writer.newLine()
         }
 
         ExportResult(nodeCount, edgeCount, Seq(outFile), None)
-    end runExport
+    end write
 
     private def writeNode(writer: BufferedWriter, node: Node): Unit =
         writer.write(s"  ${node.id} [label=${node.label}")

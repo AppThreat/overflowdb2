@@ -7,7 +7,7 @@ import scala.jdk.CollectionConverters.{IterableHasAsScala, MapHasAsScala}
 
 package object formats:
     object Format extends Enumeration:
-        val Neo4jCsv, GraphML, GraphSON, Dot, Gexf = Value
+        val Neo4jCsv, GraphML, GraphSON, Dot, Gexf, Gnn = Value
 
         lazy val byNameLowercase: Map[String, Format.Value] =
             values.map(format => (format.toString.toLowerCase, format)).toMap

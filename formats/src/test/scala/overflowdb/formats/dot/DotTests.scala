@@ -71,4 +71,26 @@ class DotTests extends AnyWordSpec {
             result should include("StringProperty=\"string\\\"Prop2\\\\\"")
         }
     }
+
+    "Exporter should export a selected subgraph via the node/edge overload" in {
+        val graph = SimpleDomain.newGraph()
+        val node1 = graph.addNode(1, TestNode.LABEL)
+        val node2 = graph.addNode(2, TestNode.LABEL)
+        val node3 = graph.addNode(3, TestNode.LABEL)
+        val edge12 = node1.addEdge(TestEdge.LABEL, node2)
+        node2.addEdge(TestEdge.LABEL, node3) // intentionally left out of the selection
+
+        File.usingTemporaryDirectory(getClass.getName) { dir =>
+            val exportResult =
+                DotExporter.runExport(Seq(node1, node2), Seq(edge12), dir.path.resolve("sub.dot"))
+            exportResult.nodeCount shouldBe 2
+            exportResult.edgeCount shouldBe 1
+
+            val result = better.files.File(exportResult.files.head).contentAsString.trim
+            result should include("1 [label=testNode")
+            result should include("2 [label=testNode")
+            result should not include "3 [label=testNode"
+            result should include("1 -> 2 [label=testEdge")
+        }
+    }
 }

@@ -200,6 +200,7 @@ OverflowDB 2 supports exporting graphs into multiple formats via the `ExporterMa
 - **GraphSON**: JSON-based serialization format for TinkerPop graphs.
 - **DOT**: Graphviz DOT format for layout and visualization.
 - **Neo4j CSV**: Group of CSV files suitable for bulk-importing into Neo4j.
+- **GNN**: JSON-based format that exports a small set of parallel arrays containing node IDs and labels, edge source/destination pairs, and edge labels. Designed for direct consumption by Graph Neural Network pipelines.
 
 ### CLI Usage
 
@@ -208,6 +209,9 @@ The exporter can be invoked from the command line if the jar is on your classpat
 ```bash
 # Export to GEXF
 java -cp <classpath> overflowdb.formats.ExporterMain -f gexf -o /path/to/output /path/to/graph.bin
+
+# Export to GNN JSON
+java -cp <classpath> overflowdb.formats.ExporterMain -f gnn -o /path/to/output /path/to/graph.bin
 ```
 
 ### Programmatic API
@@ -216,10 +220,14 @@ You can export graphs directly in your code:
 
 ```scala
 import overflowdb.formats.gexf.GexfExporter
+import overflowdb.formats.gnn.GnnExporter
 import java.nio.file.Paths
 
 // Export the graph to a GEXF file
 GexfExporter.runExport(graph, Paths.get("export.gexf"))
+
+// Export the graph to a GNN JSON file
+GnnExporter.runExport(graph, Paths.get("export.json"))
 ```
 
 ## Algorithms
@@ -236,6 +244,7 @@ The library includes optimized implementations of graph algorithms designed for 
 - `overflowdb.algorithm.StronglyConnectedComponents`: Extracts strongly connected components using Tarjan's algorithm. It operates iteratively using custom state frames to remain stack-safe on large cycles.
 - `overflowdb.algorithm.ContextSensitivePathFinder`: Performs context-sensitive path queries using open/close brackets logic to match calls and returns, eliminating invalid paths across call sites.
 - `overflowdb.algorithm.AsynchronousPrefetcher`: Pre-loads evicted nodes from backing disk storage in background thread workers to eliminate blocking I/O during heavy traversals.
+- `overflowdb.algorithm.PageRank`: Implements the classic PageRank iteration and in-degree counts restricted to a given node universe. It spreads importance along edges to rank nodes (useful for prioritizing heavily referenced nodes like call graph hubs), allowing custom configurations for damping factor, max iterations, and convergence tolerance.
 - `overflowdb.algorithm.GnnExporter`: Extracts subgraphs into parallel flat primitive arrays containing node IDs, edge source/destination pairs, and labels, designed for direct consumption by Graph Neural Network frameworks.
 
 ### Example usage
@@ -299,7 +308,11 @@ AsynchronousPrefetcher prefetcher = new AsynchronousPrefetcher(4);
 prefetcher.prefetch(unloadedNodes);
 
 // 11. GNN Subgraph Export
-GnnExport gnnData = GnnExporter.exportGraph(subgraphNodes);
+GnnExporter.GnnExport gnnData = GnnExporter.exportGraph(subgraphNodes);
+
+// 12. Page Rank and In-Degree Ranking
+Map<Long, Double> pageRanks = PageRank.compute(subgraphNodes, n -> n.out("CALL"));
+Map<Long, Integer> inDegrees = PageRank.inDegree(subgraphNodes, n -> n.out("CALL"));
 ```
 
 ## License
