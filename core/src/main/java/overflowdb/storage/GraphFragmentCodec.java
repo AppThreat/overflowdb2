@@ -56,6 +56,18 @@ public class GraphFragmentCodec {
                 }
             }
         }
+        // Also include detached nodes that appear only as edge endpoints (never explicitly added as
+        // a node change). applyDiff materializes such endpoints, so they are genuinely part of the
+        // fragment; without this they would look "external" and make an otherwise self-contained
+        // fragment be refused (e.g. JS frontends reference BINDING/LOCAL nodes only via edges).
+        for (Iterator<BatchedUpdate.Change> it = diff.iterator(); it.hasNext(); ) {
+            BatchedUpdate.Change change = it.next();
+            if (change instanceof BatchedUpdate.CreateEdge) {
+                BatchedUpdate.CreateEdge create = (BatchedUpdate.CreateEdge) change;
+                registerDetachedEndpoint(create.src, nodeToLocalId, localNodes);
+                registerDetachedEndpoint(create.dst, nodeToLocalId, localNodes);
+            }
+        }
 
         List<String> glossaryList = new ArrayList<>();
         Map<String, Integer> glossaryMap = new HashMap<>();
@@ -90,7 +102,10 @@ public class GraphFragmentCodec {
                     srcLocal = nodeToLocalId.get(((NodeRef<?>) create.src).get());
                 }
                 if (srcLocal == null) {
-                    continue;
+                    // Edge from a node outside this fragment: the fragment is not self-contained and
+                    // would be lossy. Refuse to encode so the caller recomputes rather than caching a
+                    // graph with silently dropped edges.
+                    return Optional.empty();
                 }
 
                 Integer dstLocal = nodeToLocalId.get(create.dst);
@@ -108,6 +123,9 @@ public class GraphFragmentCodec {
                     }
                     if (keyOpt != null && keyOpt.isPresent()) {
                         boundaryRefs.add(new DecodedFragment.DecodedBoundaryRef(srcLocal, create.label, keyOpt.get()));
+                    } else {
+                        // Dangling edge to an external node with no boundary key: not self-contained.
+                        return Optional.empty();
                     }
                 }
             }
@@ -518,8 +536,42 @@ public class GraphFragmentCodec {
             boolean[] array = (boolean[]) value;
             packer.packArrayHeader(array.length);
             for (boolean b : array) packer.packBoolean(b);
+        } else if (value.getClass().getName().startsWith("scala.collection.")) {
+            // Scala collection-valued properties (e.g. list-typed CPG properties such as
+            // DYNAMIC_TYPE_HINT_FULL_NAME) are packed element-wise as an object array, matching how
+            // the graph store handles list properties. odb2 has no compile-time scala dependency, so
+            // the collection is iterated reflectively.
+            java.util.List<Object> list = scalaCollectionToList(value);
+            packer.packByte(ValueTypes.ARRAY_OBJECT.id);
+            packer.packArrayHeader(list.size());
+            for (Object o : list) packTypedValue(packer, o, nodeToLocalId, getGlossaryId);
         } else {
             throw new UnsupportedOperationException("value of type " + value.getClass() + " not supported for serialization");
+        }
+    }
+
+    /** Register a detached edge endpoint as a fragment-local node if it is a DetachedNodeData that
+      * was not already collected (NodeRef endpoints are existing graph nodes - left external). */
+    private static void registerDetachedEndpoint(NodeOrDetachedNode endpoint, Map<Object, Integer> nodeToLocalId, List<DetachedNodeData> localNodes) {
+        if (endpoint instanceof DetachedNodeData && !nodeToLocalId.containsKey(endpoint)) {
+            nodeToLocalId.put(endpoint, localNodes.size());
+            localNodes.add((DetachedNodeData) endpoint);
+        }
+    }
+
+    /** Reflectively iterate a scala collection into a java list (odb2 has no scala compile dep). */
+    private static java.util.List<Object> scalaCollectionToList(Object scalaColl) throws IOException {
+        try {
+            Object iterator = scalaColl.getClass().getMethod("iterator").invoke(scalaColl);
+            java.lang.reflect.Method hasNext = iterator.getClass().getMethod("hasNext");
+            java.lang.reflect.Method next = iterator.getClass().getMethod("next");
+            hasNext.setAccessible(true);
+            next.setAccessible(true);
+            java.util.List<Object> out = new java.util.ArrayList<>();
+            while ((Boolean) hasNext.invoke(iterator)) out.add(next.invoke(iterator));
+            return out;
+        } catch (Exception e) {
+            throw new IOException("Failed to iterate scala collection " + scalaColl.getClass() + ": " + e.getMessage());
         }
     }
 
