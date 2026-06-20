@@ -50,24 +50,19 @@ public class NodeSerializer extends BookKeeper {
     }
 
     private void packProperties(MessageBufferPacker packer, NodeDb node) throws IOException {
-        Set<String> propertyKeys = node.propertyKeys();
-        int nonDefaultPropertyCount = 0;
-        for (String propertyKey : propertyKeys) {
-            Object value = node.property(propertyKey);
-            if (value != null && !value.equals(node.propertyDefaultValue(propertyKey))) {
-                nonDefaultPropertyCount++;
-            }
-        }
-
-        packer.packMapHeader(nonDefaultPropertyCount);
-        for (String propertyKey : propertyKeys) {
-            Object value = node.property(propertyKey);
-            if (value != null && !value.equals(node.propertyDefaultValue(propertyKey))) {
-                int propertyKeyId = storage.lookupStringToInt(propertyKey);
-                packer.packInt(propertyKeyId);
-                Object valueMaybeConverted = convertPropertyForPersistence == null ? value : convertPropertyForPersistence.apply(value);
-                packTypedValue(packer, valueMaybeConverted);
-            }
+        // `propertiesMapForStorage()` is overridden by codegen to build the set of non-default
+        // properties straight from the node's typed fields (one small map, only the properties that
+        // are actually set). This avoids iterating every schema property key twice through the
+        // generic `property(key)` switch - which boxed and discarded a value per key per pass - and
+        // is the storage-typed view intended for serialization.
+        Map<String, Object> properties = node.propertiesMapForStorage();
+        packer.packMapHeader(properties.size());
+        for (Map.Entry<String, Object> entry : properties.entrySet()) {
+            int propertyKeyId = storage.lookupStringToInt(entry.getKey());
+            packer.packInt(propertyKeyId);
+            Object value = entry.getValue();
+            Object valueMaybeConverted = convertPropertyForPersistence == null ? value : convertPropertyForPersistence.apply(value);
+            packTypedValue(packer, valueMaybeConverted);
         }
     }
 
