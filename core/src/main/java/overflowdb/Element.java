@@ -15,6 +15,7 @@ public abstract class Element {
 
   public abstract <A> A property(PropertyKey<A> key);
 
+  @SuppressWarnings("unchecked")
   public <A> A property(String key, A defaultValue) {
     Object value = property(key);
     return value != null ? (A) value : defaultValue;

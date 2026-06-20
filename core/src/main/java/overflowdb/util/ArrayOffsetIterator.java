@@ -28,6 +28,7 @@ public class ArrayOffsetIterator<T> implements Iterator<T> {
    * Elements within the arrays may be null, e.g. because an edge was deleted.
    * Therefor we need to have the ability to peek forward to the next element.
   */
+  @SuppressWarnings("unchecked")
   private T peekNext() {
     if (nextCached != null)
       return nextCached;

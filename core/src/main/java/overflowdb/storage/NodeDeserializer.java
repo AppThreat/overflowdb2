@@ -46,7 +46,8 @@ public class NodeDeserializer extends BookKeeper {
         return deserialize(bytes, null);
     }
 
-    public final NodeDb deserialize(byte[] bytes, NodeRef ref) throws IOException {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public final NodeDb deserialize(byte[] bytes, NodeRef<?> ref) throws IOException {
         long startTimeNanos = getStartTimeNanos();
         if (null == bytes)
             return null;
@@ -59,7 +60,7 @@ public class NodeDeserializer extends BookKeeper {
             Map<Integer, String> cache = stringCache.get();
             final String label = cache.computeIfAbsent(labelStringId,
                     storage::reverseLookupStringToIntMapping);
-            NodeDb node = getNodeFactory(label).createNode(graph, id, ref);
+            NodeDb node = ((NodeFactory) getNodeFactory(label)).createNode(graph, id, ref);
             PropertyHelper.attachProperties(node, properties);
 
             deserializeEdges(unpacker, node, Direction.OUT);

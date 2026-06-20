@@ -14,7 +14,7 @@ import java.util.stream.LongStream;
 public final class IndexManager {
 
   private final Graph graph;
-  private final Map<String, Map<Object, Set<NodeRef>>> indexes = new ConcurrentHashMap<>();
+  private final Map<String, Map<Object, Set<NodeRef<?>>>> indexes = new ConcurrentHashMap<>();
   private final Map<String, Boolean> dirtyFlags = new ConcurrentHashMap<>();
 
   public IndexManager(Graph graph) {
@@ -32,7 +32,7 @@ public final class IndexManager {
     dirtyFlags.put(propertyName, true);
     graph.nodes.iterator().forEachRemaining(node -> {
       Object value = node.property(propertyName);
-      if (value != null) put(propertyName, value, (NodeRef) node);
+      if (value != null) put(propertyName, value, (NodeRef<?>) node);
     });
   }
 
@@ -49,7 +49,7 @@ public final class IndexManager {
     dirtyFlags.put(propertyName, false);
     valueToNodeIds.entrySet().parallelStream().forEach(entry ->
             LongStream.of(entry.getValue())
-                    .forEach(nodeId -> put(propertyName, entry.getKey(), (NodeRef) graph.node(nodeId))));
+                    .forEach(nodeId -> put(propertyName, entry.getKey(), (NodeRef<?>) graph.node(nodeId))));
   }
 
   public void putIfIndexed(final String key, final Object newValue, final NodeRef<?> nodeRef) {
@@ -60,8 +60,8 @@ public final class IndexManager {
   }
 
   private void put(final String key, final Object value, final NodeRef<?> nodeRef) {
-    Map<Object, Set<NodeRef>> keyMap = indexes.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
-    Set<NodeRef> objects = keyMap.computeIfAbsent(value, k -> ConcurrentHashMap.newKeySet());
+    Map<Object, Set<NodeRef<?>>> keyMap = indexes.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
+    Set<NodeRef<?>> objects = keyMap.computeIfAbsent(value, k -> ConcurrentHashMap.newKeySet());
     objects.add(nodeRef);
   }
 
@@ -80,25 +80,25 @@ public final class IndexManager {
   }
 
   public int getIndexedNodeCount(String propertyName) {
-    final Map<Object, Set<NodeRef>> indexMap = this.indexes.get(propertyName);
+    final Map<Object, Set<NodeRef<?>>> indexMap = this.indexes.get(propertyName);
     return indexMap == null ? 0 : indexMap.values().stream().mapToInt(Set::size).sum();
   }
 
-  public List<NodeRef> lookup(final String key, final Object value) {
-    final Map<Object, Set<NodeRef>> keyMap = indexes.get(key);
+  public List<NodeRef<?>> lookup(final String key, final Object value) {
+    final Map<Object, Set<NodeRef<?>>> keyMap = indexes.get(key);
     if (null == keyMap) {
       return Collections.emptyList();
     } else {
-      Set<NodeRef> set = keyMap.get(value);
+      Set<NodeRef<?>> set = keyMap.get(value);
       return set == null ? Collections.emptyList() : new ArrayList<>(set);
     }
   }
 
   void remove(final String key, final Object value, final NodeRef<?> nodeRef) {
     dirtyFlags.put(key, true);
-    final Map<Object, Set<NodeRef>> keyMap = indexes.get(key);
+    final Map<Object, Set<NodeRef<?>>> keyMap = indexes.get(key);
     if (null != keyMap) {
-      Set<NodeRef> objects = keyMap.get(value);
+      Set<NodeRef<?>> objects = keyMap.get(value);
       if (null != objects) {
         objects.remove(nodeRef);
         if (objects.isEmpty()) {
@@ -120,7 +120,7 @@ public final class IndexManager {
     }
   }
 
-  private Map<Object, Set<NodeRef>> getIndexMap(String propertyName) {
+  private Map<Object, Set<NodeRef<?>>> getIndexMap(String propertyName) {
     return this.indexes.get(propertyName);
   }
 
@@ -138,13 +138,13 @@ public final class IndexManager {
             saveIndex(storage, propertyName, getIndexMap(propertyName)));
   }
 
-  private void saveIndex(OdbStorage storage, String propertyName, Map<Object, Set<NodeRef>> indexMap) {
+  private void saveIndex(OdbStorage storage, String propertyName, Map<Object, Set<NodeRef<?>>> indexMap) {
     if (dirtyFlags.getOrDefault(propertyName, false)) {
       storage.clearIndex(propertyName);
       final MVMap<Object, long[]> indexStore = storage.openIndex(propertyName);
       indexMap.entrySet().parallelStream().forEach(entry -> {
         final Object propertyValue = entry.getKey();
-        final Set<NodeRef> nodeRefs = entry.getValue();
+        final Set<NodeRef<?>> nodeRefs = entry.getValue();
         if (!nodeRefs.isEmpty()) {
           indexStore.put(propertyValue, nodeRefs.stream().mapToLong(nodeRef -> nodeRef.id).toArray());
         }

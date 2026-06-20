@@ -40,10 +40,11 @@ public abstract class NodeDb extends Node {
 
   private static final String[] ALL_LABELS = new String[0];
 
-  protected NodeDb(NodeRef ref) {
+  @SuppressWarnings({"unchecked", "this-escape"})
+  protected NodeDb(NodeRef<?> ref) {
     this.ref = ref;
 
-    ref.setNode(this);
+    ((NodeRef<NodeDb>) ref).setNode(this);
     if (ref.graph != null) {
       ref.graph.applyBackpressureMaybe();
     }
@@ -75,6 +76,7 @@ public abstract class NodeDb extends Node {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public <A> A property(PropertyKey<A> key) {
     return (A) property(key.name);
   }
@@ -138,12 +140,12 @@ public abstract class NodeDb extends Node {
 
   @Override
   protected <A> void setPropertyImpl(PropertyKey<A> key, A value) {
-    setProperty(key.name, value);
+    setPropertyImpl(key.name, value);
   }
 
   @Override
   protected void setPropertyImpl(Property<?> property) {
-    setProperty(property.key.name, property.value);
+    setPropertyImpl(property.key.name, property.value);
   }
 
   @Override
@@ -165,7 +167,7 @@ public abstract class NodeDb extends Node {
     bothE().forEachRemaining(edges::add);
     for (Edge edge : edges) {
       if (!edge.isRemoved()) {
-        edge.remove();
+        edge.removeInternal();
       }
     }
 
@@ -224,6 +226,7 @@ public abstract class NodeDb extends Node {
     return Optional.ofNullable(value);
   }
 
+  @SuppressWarnings("unchecked")
   public <P> P edgeProperty(Direction direction,
                             Edge edge,
                             int blockOffset,
@@ -306,7 +309,7 @@ public abstract class NodeDb extends Node {
 
   @Override
   protected Edge addEdgeImpl(String label, Node inNode, Map<String, Object> keyValues) {
-    return addEdge(label, inNode, PropertyHelper.toKeyValueArray(keyValues));
+    return addEdgeInternal(label, inNode, PropertyHelper.toKeyValueArray(keyValues));
   }
 
   @Override
@@ -319,7 +322,7 @@ public abstract class NodeDb extends Node {
 
   @Override
   protected void addEdgeSilentImpl(String label, Node inNode, Map<String, Object> keyValues) {
-    addEdgeSilent(label, inNode, PropertyHelper.toKeyValueArray(keyValues));
+    addEdgeSilentInternal(label, inNode, PropertyHelper.toKeyValueArray(keyValues));
   }
 
   /* adjacent OUT nodes (all labels) */
@@ -774,11 +777,12 @@ public abstract class NodeDb extends Node {
   /**
    * instantiate and return a dummy edge, which doesn't really exist in the graph
    */
+  @SuppressWarnings("unchecked")
   public final Edge instantiateDummyEdge(String label, NodeRef<?> outNode, NodeRef<?> inNode) {
-    final EdgeFactory edgeFactory = ref.graph.edgeFactoryByLabel.get(label);
+    final EdgeFactory<?> edgeFactory = ref.graph.edgeFactoryByLabel.get(label);
     if (edgeFactory == null)
       throw new IllegalArgumentException("specializedEdgeFactory for label=" + label + " not found - please register on startup!");
-    return edgeFactory.createEdge(ref.graph, outNode, inNode);
+    return edgeFactory.createEdge(ref.graph, (NodeRef<NodeDb>) outNode, (NodeRef<NodeDb>) inNode);
   }
 
   /**

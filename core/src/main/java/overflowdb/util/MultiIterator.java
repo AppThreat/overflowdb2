@@ -9,12 +9,14 @@ import java.util.NoSuchElementException;
 /**
  * Subclass-safe variant of MultiIterator from Tinkerpop
  */
+@SuppressWarnings("serial")
 public final class MultiIterator<T> implements Iterator<T>, Serializable {
+  private static final long serialVersionUID = 1L;
 
   @SafeVarargs
   public static <A> MultiIterator<A> from(Iterator<A>... iterators) {
     MultiIterator<A> result = new MultiIterator<>();
-    for (Iterator iter : iterators) result.addIterator(iter);
+    for (Iterator<A> iter : iterators) result.addIterator(iter);
     return result;
   }
 
@@ -30,7 +32,7 @@ public final class MultiIterator<T> implements Iterator<T>, Serializable {
     if (this.current >= this.iterators.size())
       return false;
 
-    Iterator currentIterator = this.iterators.get(this.current);
+    Iterator<? extends T> currentIterator = this.iterators.get(this.current);
 
     while (true) {
       if (currentIterator.hasNext()) {

@@ -154,6 +154,7 @@ public abstract class Edge extends Element {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public <A> A property(PropertyKey<A> key) {
     return (A) property(key.name);
   }
@@ -170,12 +171,12 @@ public abstract class Edge extends Element {
 
   @Override
   protected <A> void setPropertyImpl(PropertyKey<A> key, A value) {
-    setProperty(key.name, value);
+    setPropertyImpl(key.name, value);
   }
 
   @Override
   protected void setPropertyImpl(Property<?> property) {
-    setProperty(property.key.name, property.value);
+    setPropertyImpl(property.key.name, property.value);
   }
 
   public boolean isRemoved() {

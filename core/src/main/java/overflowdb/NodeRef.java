@@ -33,6 +33,7 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
   /**
    * used when creating a node without the underlying instance at hand
    */
+  @SuppressWarnings("unchecked")
   public NodeRef(final Graph graph, final long id) {
     this.graph = graph;
     this.id = id;
@@ -57,7 +58,7 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
    * We'd prefer this to be package-private, but since NodesWriter is in a different package that's not an option in java.
    * To not pollute the public api (esp. for console users) we made this method static instead.
    * */
-  public static void clear(NodeRef ref) {
+  public static void clear(NodeRef<?> ref) {
     ref.node = null;
   }
 
@@ -115,6 +116,7 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
     this.node = node;
   }
 
+  @SuppressWarnings("unchecked")
   private final N readFromDisk() throws IOException {
     byte[] bytes = graph.storage.getSerializedNode(this.id);
     return (N) graph.nodeDeserializer.deserialize(bytes, this);

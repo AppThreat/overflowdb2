@@ -196,7 +196,7 @@ public class NodeSerializer extends BookKeeper {
                 packer.packByte(ValueTypes.CHARACTER.id);
                 packer.packInt(character);
             }
-            case java.util.List list -> {
+            case java.util.List<?> list -> {
                 packer.packByte(ValueTypes.ARRAY_OBJECT.id);
                 packer.packArrayHeader(list.size());
                 for (Object o : list) packTypedValue(packer, o);

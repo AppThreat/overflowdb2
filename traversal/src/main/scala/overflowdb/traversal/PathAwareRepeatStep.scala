@@ -10,7 +10,7 @@ object PathAwareRepeatStep:
     case class WorklistItem[A](traversal: Traversal[A], depth: Int)
 
     /** @see
-      *   [[Traversal.repeat]] for a detailed overview
+      *   [[TraversalRepeatExt.repeat]] for a detailed overview
       *
       * Implementation note: using recursion results in nicer code, but uses the JVM stack, which
       * only has enough space for ~10k steps. So instead, this uses a programmatic Stack which is

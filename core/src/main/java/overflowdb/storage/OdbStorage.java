@@ -334,7 +334,7 @@ public class OdbStorage implements AutoCloseable {
     }
 
     private void persistOdbLibraryVersion() {
-        Class clazz = getClass();
+        Class<?> clazz = getClass();
         String version = clazz.getPackage().getImplementationVersion();
         if (version != null) persistLibraryVersion(clazz.getCanonicalName(), version);
     }

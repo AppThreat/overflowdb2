@@ -26,7 +26,7 @@ public class ReferenceManager implements AutoCloseable {
   private final OdbStorage storage;
   private final NodesWriter nodesWriter;
 
-  private final Queue<NodeRef> clearableRefs = new ConcurrentLinkedQueue<>();
+  private final Queue<NodeRef<?>> clearableRefs = new ConcurrentLinkedQueue<>();
 
   public ReferenceManager(OdbStorage storage, NodesWriter nodesWriter) {
     this(storage, nodesWriter, Executors.newSingleThreadExecutor(new NamedThreadFactory("overflowdb-reference-manager")), true);
@@ -52,7 +52,7 @@ public class ReferenceManager implements AutoCloseable {
   }
 
   /* Register NodeRef, so it can be cleared on low memory */
-  public void registerRef(NodeRef ref) {
+  public void registerRef(NodeRef<?> ref) {
     clearableRefs.add(ref);
   }
 
@@ -72,14 +72,14 @@ public class ReferenceManager implements AutoCloseable {
    * run clearing of references asynchronously to not block the gc notification thread
    */
   private void syncClearReferences(final int releaseCount) {
-    final List<NodeRef> refsToClear = collectRefsToClear(releaseCount);
+    final List<NodeRef<?>> refsToClear = collectRefsToClear(releaseCount);
     if (!refsToClear.isEmpty()) {
       safelyClearReferences(refsToClear);
     }
   }
 
-  private List<NodeRef> collectRefsToClear(int releaseCount) {
-    final List<NodeRef> refsToClear = new ArrayList<>(releaseCount);
+  private List<NodeRef<?>> collectRefsToClear(int releaseCount) {
+    final List<NodeRef<?>> refsToClear = new ArrayList<>(releaseCount);
 
     while (releaseCount > 0) {
       final NodeRef<?> ref = clearableRefs.poll();
@@ -93,7 +93,7 @@ public class ReferenceManager implements AutoCloseable {
     return refsToClear;
   }
 
-  private void safelyClearReferences(final List<NodeRef> refsToClear) {
+  private void safelyClearReferences(final List<NodeRef<?>> refsToClear) {
     try {
       synchronized (backPressureSyncObject) {
         clearingProcessCount += 1;
@@ -112,8 +112,8 @@ public class ReferenceManager implements AutoCloseable {
   }
 
   public void clearAllReferences() {
-    List<NodeRef> allRefs = new ArrayList<>(clearableRefs.size());
-    NodeRef ref;
+    List<NodeRef<?>> allRefs = new ArrayList<>(clearableRefs.size());
+    NodeRef<?> ref;
     while ((ref = clearableRefs.poll()) != null) {
       allRefs.add(ref);
     }
