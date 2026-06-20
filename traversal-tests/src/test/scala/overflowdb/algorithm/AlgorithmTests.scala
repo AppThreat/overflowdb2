@@ -6,7 +6,7 @@ import overflowdb.Node
 import overflowdb.traversal.testdomains.simple.{Connection, SimpleDomain}
 
 import java.util.ArrayList
-import scala.jdk.CollectionConverters.IteratorHasAsScala
+import scala.jdk.CollectionConverters.*
 
 class AlgorithmTests extends AnyWordSpec {
 
@@ -194,6 +194,61 @@ class AlgorithmTests extends AnyWordSpec {
             sccSets should contain (Set(a, b, c))
             sccSets should contain (Set(d))
             
+            graph.close()
+        }
+    }
+
+    "PageRank" should {
+        "rank a heavily referenced node above the rest" in {
+            val graph = SimpleDomain.newGraph
+            val hub = graph.addNode("thing")
+            val a = graph.addNode("thing")
+            val b = graph.addNode("thing")
+            val c = graph.addNode("thing")
+
+            // a, b and c all point at the hub
+            a.addEdge(Connection.Label, hub)
+            b.addEdge(Connection.Label, hub)
+            c.addEdge(Connection.Label, hub)
+
+            val nodes = java.util.Arrays.asList(hub, a, b, c)
+            val ranks = PageRank.compute(nodes, n => n.out(Connection.Label))
+
+            ranks.size() shouldBe 4
+            val total = ranks.values().asScala.map(_.doubleValue()).sum
+            total shouldBe (1.0 +- 1e-6)
+            withClue("hub should outrank every node pointing at it") {
+                ranks.get(hub.id()) should be > ranks.get(a.id())
+                ranks.get(hub.id()) should be > ranks.get(b.id())
+                ranks.get(hub.id()) should be > ranks.get(c.id())
+            }
+            graph.close()
+        }
+
+        "count in-degree restricted to the given node set" in {
+            val graph = SimpleDomain.newGraph
+            val hub = graph.addNode("thing")
+            val a = graph.addNode("thing")
+            val b = graph.addNode("thing")
+            val outside = graph.addNode("thing")
+
+            a.addEdge(Connection.Label, hub)
+            b.addEdge(Connection.Label, hub)
+            outside.addEdge(Connection.Label, hub) // not part of the universe below
+
+            val nodes = java.util.Arrays.asList(hub, a, b)
+            val degrees = PageRank.inDegree(nodes, n => n.out(Connection.Label))
+
+            degrees.get(hub.id()) shouldBe 2
+            degrees.get(a.id()) shouldBe 0
+            degrees.get(b.id()) shouldBe 0
+            graph.close()
+        }
+
+        "return an empty result for an empty universe" in {
+            val graph = SimpleDomain.newGraph
+            val ranks = PageRank.compute(java.util.Collections.emptyList(), n => n.out(Connection.Label))
+            ranks.isEmpty shouldBe true
             graph.close()
         }
     }

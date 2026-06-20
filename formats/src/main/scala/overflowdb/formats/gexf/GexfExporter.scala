@@ -6,6 +6,7 @@ import overflowdb.{Edge, Element, Graph, Node}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
+import scala.jdk.CollectionConverters.IteratorHasAsScala
 import scala.util.Using
 
 /** Exporter for Gephi Graph Exchange XML Format (GEXF). Generates standards-compliant GEXF 1.2
@@ -15,27 +16,30 @@ object GexfExporter extends Exporter:
     override def defaultFileExtension = "gexf"
 
     override def runExport(graph: Graph, outputFile: Path): ExportResult =
+        write(graph.nodes().asScala.toSeq, graph.edges().asScala.toSeq, outputFile)
+
+    /** Subgraph entry point: export only the given nodes and edges. The caller is responsible for
+      * supplying a self-contained selection (edges whose endpoints are part of the node set).
+      */
+    override def runExport(
+      nodes: IterableOnce[Node],
+      edges: IterableOnce[Edge],
+      outputFile: Path
+    ): ExportResult =
+        write(nodes.iterator.toSeq, edges.iterator.toSeq, outputFile)
+
+    private def write(
+      nodes: Seq[Node],
+      edges: Seq[Edge],
+      outputFile: Path
+    ): ExportResult =
         val outFile = resolveOutputFileSingle(outputFile, s"export.$defaultFileExtension")
         val nodePropertyContextById    = mutable.Map.empty[String, PropertyContext]
         val edgePropertyContextById    = mutable.Map.empty[String, PropertyContext]
         val discardedListPropertyCount = new AtomicInteger(0)
 
-        val nodeScan = graph.nodes()
-        while nodeScan.hasNext do
-            collectKeys(
-              nodeScan.next(),
-              "node",
-              nodePropertyContextById,
-              discardedListPropertyCount
-            )
-        val edgeScan = graph.edges()
-        while edgeScan.hasNext do
-            collectKeys(
-              edgeScan.next(),
-              "edge",
-              edgePropertyContextById,
-              discardedListPropertyCount
-            )
+        nodes.foreach(collectKeys(_, "node", nodePropertyContextById, discardedListPropertyCount))
+        edges.foreach(collectKeys(_, "edge", edgePropertyContextById, discardedListPropertyCount))
 
         var nodeCount = 0
         var edgeCount = 0
@@ -61,22 +65,20 @@ object GexfExporter extends Exporter:
 
             writer.write("        <nodes>")
             writer.newLine()
-            val nodes = graph.nodes()
-            while nodes.hasNext do
-                val node = nodes.next()
+            nodes.foreach { node =>
                 nodeCount += 1
                 writeNode(writer, node, nodePropertyContextById)
+            }
             writer.write("        </nodes>")
             writer.newLine()
 
             writer.write("        <edges>")
             writer.newLine()
-            val edges = graph.edges()
-            while edges.hasNext do
-                val edge   = edges.next()
+            edges.foreach { edge =>
                 val edgeId = edgeCount
                 edgeCount += 1
                 writeEdge(writer, edgeId, edge, edgePropertyContextById)
+            }
             writer.write("        </edges>")
             writer.newLine()
 
@@ -92,7 +94,7 @@ object GexfExporter extends Exporter:
             }
 
         ExportResult(nodeCount, edgeCount, Seq(outFile), additionalInfo)
-    end runExport
+    end write
 
     private def collectKeys(
       element: Element,
