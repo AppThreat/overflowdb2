@@ -80,6 +80,28 @@ Config config = Config.withDefaults()
     .withStorageCompressionMode(Config.StorageCompressionMode.LZF);
 
 // Register your factories
+```
+
+#### Storage compression (`-Dodb.storage.compression`)
+
+The MVStore page compressor used when nodes overflow to disk is configurable, and the default can be
+overridden at runtime via a system property (no recompilation needed):
+
+```
+-Dodb.storage.compression=none|lzf|deflate
+```
+
+| Value     | Speed              | On-disk size | When to use                                                                                                             |
+| --------- | ------------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `deflate` | slow (**default**) | smallest     | The default — produces the smallest store, which matters most on large codebases.                                       |
+| `lzf`     | fast               | medium       | Large graphs that overflow the heap — the spill/save path runs on a single thread and DEFLATE compression dominates it. |
+| `none`    | fastest            | largest      | Plenty of disk and the store is short-lived.                                                                            |
+
+The compressor is recorded per chunk, so a store written with one mode is still readable with any
+other (an `lzf` store loads fine under the `deflate` default). An explicit
+`withStorageCompressionMode(...)` on `Config` takes precedence over the system property.
+
+```java
 Graph graph = Graph.open(
     config,
     List.of(new MethodNodeFactory(), new LiteralNodeFactory()),

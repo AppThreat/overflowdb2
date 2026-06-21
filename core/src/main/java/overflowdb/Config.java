@@ -18,8 +18,28 @@ public class Config {
     private static final int defaultPageSplitSize = 64 * 1024; // 64 KB
     private Optional<Integer> cacheSize = Optional.empty();
     private Optional<Integer> pageSplitSize = Optional.empty();
-    private StorageCompressionMode compressionMode = StorageCompressionMode.DEFLATE;
+    private StorageCompressionMode compressionMode = defaultCompressionMode();
     private boolean glossaryPreinitEnabled = true;
+
+    /** The storage compression mode, overridable via {@code -Dodb.storage.compression=none|lzf|deflate}.
+     *
+     * Defaults to DEFLATE, which produces the smallest on-disk store (atom files are large on big
+     * codebases, so size wins by default). On large graphs that overflow the heap the MVStore
+     * spill/save path runs on a single thread and DEFLATE's compression can dominate it (juice-shop
+     * slicing spent significant time in {@code Deflater.deflate}); set {@code -Dodb.storage.compression=lzf}
+     * for a several-times-faster spill at a modest increase in file size, or {@code none} to skip
+     * compression entirely. MVStore records the compressor per chunk, so a store written under one
+     * mode loads fine under another. */
+    private static StorageCompressionMode defaultCompressionMode() {
+        String prop = System.getProperty("odb.storage.compression");
+        if (prop == null) return StorageCompressionMode.DEFLATE;
+        switch (prop.trim().toLowerCase()) {
+            case "none":    return StorageCompressionMode.NONE;
+            case "deflate": return StorageCompressionMode.DEFLATE;
+            case "lzf":     return StorageCompressionMode.LZF;
+            default:        return StorageCompressionMode.DEFLATE;
+        }
+    }
 
 
     public static Config withDefaults() {
