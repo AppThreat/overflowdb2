@@ -7,3 +7,6 @@ libraryDependencies ++= Seq(
 )
 
 Test / testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v")
+
+// HeapUsageMonitorTest reads the GC MXBeans' listener lists
+Test / javaOptions += "--add-opens=java.management/sun.management=ALL-UNNAMED"
