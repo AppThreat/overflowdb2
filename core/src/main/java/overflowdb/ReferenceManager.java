@@ -25,6 +25,7 @@ public class ReferenceManager implements AutoCloseable {
   private final Object backPressureSyncObject = new Object();
   private final OdbStorage storage;
   private final NodesWriter nodesWriter;
+  private HeapUsageMonitor heapUsageMonitor;
 
   private final Queue<NodeRef<?>> clearableRefs = new ConcurrentLinkedQueue<>();
 
@@ -47,8 +48,11 @@ public class ReferenceManager implements AutoCloseable {
     executorService.submit(() -> syncClearReferences(releaseCount));
   }
 
-  public void installHeapUsageMonitor(int heapPercentageThreshold) {
-    HeapUsageMonitor.install(this, heapPercentageThreshold);
+  public synchronized void installHeapUsageMonitor(int heapPercentageThreshold) {
+    if (heapUsageMonitor != null) {
+      heapUsageMonitor.close();
+    }
+    heapUsageMonitor = HeapUsageMonitor.install(this, heapPercentageThreshold);
   }
 
   /* Register NodeRef, so it can be cleared on low memory */
@@ -121,7 +125,12 @@ public class ReferenceManager implements AutoCloseable {
   }
 
   @Override
-  public void close() {
+  public synchronized void close() {
+    // the GC MXBeans outlive this graph: their listeners must not keep us (and our storage) reachable
+    if (heapUsageMonitor != null) {
+      heapUsageMonitor.close();
+      heapUsageMonitor = null;
+    }
     if (shutdownExecutorOnClose) {
       executorService.shutdown();
     }
