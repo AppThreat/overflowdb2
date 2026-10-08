@@ -58,6 +58,39 @@ public class GraphSaveRestoreTest {
   }
 
   @Test
+  public void manyBatchesRoundTrip() throws IOException {
+    final File storageFile = Files.createTempFile("overflowdb", "bin").toFile();
+    storageFile.deleteOnExit();
+    // Not a multiple of the batch size, so the last batch is partial.
+    final int count = NodesWriter.BATCH_SIZE * 3 + 17;
+
+    final long[] ids = new long[count];
+    try (Graph graph = openGratefulDeadGraph(storageFile, false)) {
+      Node prev = null;
+      for (int i = 0; i < count; i++) {
+        Node n = graph.addNode(Song.label, Song.NAME, "Song " + i);
+        ids[i] = n.id();
+        if (prev != null) prev.addEdge(FollowedBy.LABEL, n, FollowedBy.WEIGHT, i);
+        prev = n;
+      }
+    }
+
+    try (Graph graph = openGratefulDeadGraph(storageFile, false)) {
+      assertEquals(count, graph.nodeCount());
+      assertEquals(count - 1, graph.edgeCount());
+      for (int i = 0; i < count; i++) {
+        Node n = graph.node(ids[i]);
+        assertEquals("Song " + i, n.property(Song.NAME));
+        if (i + 1 < count) {
+          Edge e = n.outE(FollowedBy.LABEL).next();
+          assertEquals(i + 1, (int) e.property(FollowedBy.WEIGHT));
+          assertEquals(ids[i + 1], e.inNode().id());
+        }
+      }
+    }
+  }
+
+  @Test
   public void completeGratefulDeadGraph() throws IOException {
     final File storageFile = Files.createTempFile("overflowdb", "bin").toFile();
     storageFile.deleteOnExit();
