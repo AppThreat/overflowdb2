@@ -1,0 +1,23 @@
+core/src/main/java/overflowdb/NodeRef.java
+  s_63c1cb61808304::t_8e149490cb40bc 132-148
+core/src/main/java/overflowdb/NodeDb.java
+  s_63c1cb61808304::t_8e149490cb40bc 179,182-184
+core/src/main/java/overflowdb/storage/NodesWriter.java
+  s_63c1cb61808304::t_8e149490cb40bc 115-118,121-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c55715eba04fce05a8a3fa446785e77029553974",
+  "prompts": {},
+  "sessions": {
+    "s_63c1cb61808304": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ced2510-d837-4ffd-b689-82e442b358ec",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Prabhu Subramanian <prabhu@appthreat.com>"
+    }
+  }
+}
