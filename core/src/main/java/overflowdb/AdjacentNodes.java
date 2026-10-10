@@ -46,6 +46,20 @@ public class AdjacentNodes {
       };
   }
 
+  /**
+   * A container for a grown copy of nodesWithEdgeProperties. The offsets are copied too: readers that do not lock the
+   * node may still hold this container, and its offsets must keep matching its own nodesWithEdgeProperties.
+   */
+  AdjacentNodes withNodesWithEdgeProperties(Object[] grown) {
+      final Object offsetsCopy = switch (offsets) {
+          case byte[] bytes -> bytes.clone();
+          case short[] shorts -> shorts.clone();
+          case int[] ints -> ints.clone();
+          default -> throw new RuntimeException("corrupt state: offsets of type " + offsets.getClass().getName());
+      };
+      return new AdjacentNodes(grown, offsetsCopy);
+  }
+
   /** Attempts to update AdjacentNodes in-place and return this; otherwise, create a new AdjacentNodes and return that.
    * */
   AdjacentNodes setOffset(int pos, int val){

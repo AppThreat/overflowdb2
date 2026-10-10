@@ -764,7 +764,7 @@ public abstract class NodeDb extends Node {
     Object[] nodesWithEdgePropertiesNew = new Object[newSize];
     System.arraycopy(nodesWithEdgePropertiesOld, 0, nodesWithEdgePropertiesNew, 0, insertAt);
     System.arraycopy(nodesWithEdgePropertiesOld, insertAt, nodesWithEdgePropertiesNew, insertAt + additionalEntriesCount, nodesWithEdgePropertiesOld.length - insertAt);
-    AdjacentNodes res = new AdjacentNodes(nodesWithEdgePropertiesNew, adjacentNodesOld.offsets);
+    AdjacentNodes res = adjacentNodesOld.withNodesWithEdgeProperties(nodesWithEdgePropertiesNew);
     // Increment all following start offsets by `additionalEntriesCount`.
     int until = res.offsetLengths();
     for (int i = offsetPos + 1; 2 * i < until; i++) {

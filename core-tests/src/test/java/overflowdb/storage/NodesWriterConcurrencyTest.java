@@ -5,6 +5,7 @@ import overflowdb.Config;
 import overflowdb.Graph;
 import overflowdb.Node;
 import overflowdb.NodeRef;
+import overflowdb.testdomains.gratefuldead.FollowedBy;
 import overflowdb.testdomains.gratefuldead.GratefulDead;
 import overflowdb.testdomains.gratefuldead.Song;
 
@@ -46,6 +47,85 @@ public class NodesWriterConcurrencyTest {
 
       assertNull(readAllWhileWriting(graph, refs, "new"));
       assertNames(refs, "new");
+    }
+  }
+
+  @Test
+  public void changesMadeWhileNodesAreClearedAreKept() throws Exception {
+    final int rounds = 5;
+    try (Graph graph = openGraph()) {
+      final List<NodeRef<?>> refs = addSongs(graph, "0");
+      final NodesWriter writer = new NodesWriter(graph.nodeSerializer, graph.getStorage());
+      final AtomicBoolean changing = new AtomicBoolean(true);
+      final AtomicReference<Throwable> failure = new AtomicReference<>();
+      final Thread clearer = new Thread(() -> {
+        try {
+          while (changing.get()) writer.writeAndClearBatched(refs.spliterator(), refs.size());
+        } catch (Throwable t) {
+          failure.compareAndSet(null, t);
+        }
+      });
+      clearer.start();
+      try {
+        for (int round = 1; round <= rounds; round++) {
+          for (NodeRef<?> ref : refs) ref.setProperty(Song.NAME, String.valueOf(round));
+        }
+      } finally {
+        changing.set(false);
+        clearer.join();
+      }
+      assertNull(failure.get());
+      assertNames(refs, String.valueOf(rounds));
+
+      // and the last change is what storage holds
+      writer.writeAndClearBatched(refs.spliterator(), refs.size());
+      for (NodeRef<?> ref : refs) NodeRef.clear(ref);
+      assertNames(refs, String.valueOf(rounds));
+    }
+  }
+
+  @Test
+  public void edgesAddedWhileNodesAreClearedAreKept() throws Exception {
+    final int rounds = 6;
+    try (Graph graph = openGraph()) {
+      final List<NodeRef<?>> refs = addSongs(graph, "song");
+      final NodesWriter writer = new NodesWriter(graph.nodeSerializer, graph.getStorage());
+      final AtomicBoolean changing = new AtomicBoolean(true);
+      final AtomicReference<Throwable> failure = new AtomicReference<>();
+      final Thread clearer = new Thread(() -> {
+        try {
+          while (changing.get()) writer.writeAndClearBatched(refs.spliterator(), refs.size());
+        } catch (Throwable t) {
+          failure.compareAndSet(null, t);
+        }
+      });
+      clearer.start();
+      try {
+        for (int round = 1; round <= rounds; round++) {
+          for (int i = 0; i < refs.size(); i++) {
+            refs.get(i).addEdge(FollowedBy.LABEL, refs.get((i + round) % refs.size()), FollowedBy.WEIGHT, round);
+          }
+        }
+      } finally {
+        changing.set(false);
+        clearer.join();
+      }
+      assertNull(failure.get());
+      assertEdgeCounts(refs, rounds);
+
+      writer.writeAndClearBatched(refs.spliterator(), refs.size());
+      for (NodeRef<?> ref : refs) NodeRef.clear(ref);
+      assertEdgeCounts(refs, rounds);
+    }
+  }
+
+  private static void assertEdgeCounts(List<NodeRef<?>> refs, int expected) {
+    for (NodeRef<?> ref : refs) {
+      int out = 0, in = 0;
+      for (java.util.Iterator<Node> it = ref.out(FollowedBy.LABEL); it.hasNext(); it.next()) out++;
+      for (java.util.Iterator<Node> it = ref.in(FollowedBy.LABEL); it.hasNext(); it.next()) in++;
+      if (out != expected || in != expected)
+        throw new AssertionError("node " + ref.id() + " has " + out + " out and " + in + " in edges");
     }
   }
 

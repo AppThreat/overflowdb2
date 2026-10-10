@@ -34,15 +34,19 @@ public class NodeSerializer extends BookKeeper {
         try (packer) {
             packer.clear();
             NodeLayoutInformation layoutInformation = node.layoutInformation();
-            node.markAsClean();
 
             packer.packLong(node.ref.id());
 
             final int labelId = storage.lookupStringToInt(layoutInformation.label);
             packer.packInt(labelId);
 
-            packProperties(packer, node);
-            packEdges(packer, node);
+            /* Edge changes lock the node (NodeDb's synchronized writers): hold it too, so that the edges are packed
+             * from one consistent state - counted and then written - and no change interleaves. */
+            synchronized (node) {
+                node.markAsClean();
+                packProperties(packer, node);
+                packEdges(packer, node);
+            }
 
             if (statsEnabled) recordStatistics(startTimeNanos);
             return packer.toByteArray();
