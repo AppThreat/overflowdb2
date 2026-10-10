@@ -43,13 +43,12 @@ public abstract class NodeDb extends Node {
   @SuppressWarnings({"unchecked", "this-escape"})
   protected NodeDb(NodeRef<?> ref) {
     this.ref = ref;
+    adjacentNodes = new AdjacentNodes(layoutInformation().numberOfDifferentAdjacentTypes());
 
     ((NodeRef<NodeDb>) ref).setNode(this);
     if (ref.graph != null) {
       ref.graph.applyBackpressureMaybe();
     }
-
-    adjacentNodes = new AdjacentNodes(layoutInformation().numberOfDifferentAdjacentTypes());
   }
 
   public abstract NodeLayoutInformation layoutInformation();

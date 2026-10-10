@@ -22,7 +22,11 @@ import java.util.function.Function;
 public abstract class NodeRef<N extends NodeDb> extends Node {
   protected final long id;
   protected final Graph graph;
-  private N node;
+  /* volatile: get() reads it without a lock, and must see a node only once it is complete */
+  private volatile N node;
+
+  /* set while this ref deserializes its node; only the loading thread reads it (see getSynchronized) */
+  private boolean loading;
 
   public NodeRef(final Graph graph, N node) {
     this.graph = graph;
@@ -100,9 +104,17 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
     if (ref != null) {
       return ref;
     } else {
-      final N node = readFromDisk();
+      /* The node is published only once its properties and edges are deserialized: a thread that finds it set in
+       * get() does not synchronize, and would otherwise see a node without (all of) its edges. */
+      final N node;
+      loading = true;
+      try {
+        node = readFromDisk();
+      } finally {
+        loading = false;
+      }
       if (node == null) throw new IllegalStateException("unable to read node from disk; id=" + id);
-      if (this.node != node) throw new AssertionError("invalid state after reading node from dist; id=" + id);
+      this.node = node;
       graph.registerNodeRef(this);
       return node;
     }
@@ -112,8 +124,9 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
     return Optional.ofNullable(node);
   }
 
+  /** Ignored while this ref deserializes its node, which getSynchronized publishes once complete. */
   public void setNode(N node) {
-    this.node = node;
+    if (!loading) this.node = node;
   }
 
   @SuppressWarnings("unchecked")
