@@ -176,8 +176,12 @@ public abstract class NodeDb extends Node {
     this.markAsDirty();
   }
 
+  @SuppressWarnings("unchecked")
   public void markAsDirty() {
     this.dirty = true;
+    /* NodesWriter clears a reference once its node is persisted. If that happened while this node was being changed,
+     * the change is only here: put the node back. */
+    if (!ref.holds(this)) ((NodeRef<NodeDb>) ref).reattach(this);
   }
 
   public void markAsClean() {

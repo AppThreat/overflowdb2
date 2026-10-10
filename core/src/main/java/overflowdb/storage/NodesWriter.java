@@ -112,12 +112,14 @@ public class NodesWriter {
             this.data = data;
         }
 
-        /** Clears the reference once its node is persisted. A node changed since it was serialized stays in memory and
-         * is registered again, so that its newer state is written by a later clearing or when the graph closes. */
+        /** Clears the reference once its node is persisted. A node changed since it was serialized is put back, so
+         * that its newer state is written by a later clearing or when the graph closes: here if the change is already
+         * marked, otherwise by the change itself (NodeDb.markAsDirty), which then finds the reference cleared. */
+        @SuppressWarnings("unchecked")
         private void release() {
             if (ref.getOption().orElse(null) != node) return;
-            if (node.isDirty()) ref.graph().registerNodeRef(ref);
-            else NodeRef.clear(ref);
+            NodeRef.clear(ref);
+            if (node.isDirty()) ((NodeRef<NodeDb>) ref).reattach(node);
         }
     }
 }

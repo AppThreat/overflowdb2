@@ -129,6 +129,23 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
     if (!loading) this.node = node;
   }
 
+  /** Whether this reference currently holds the given node instance. */
+  boolean holds(NodeDb node) {
+    return this.node == node;
+  }
+
+  /**
+   * Puts back a node whose reference was cleared (see {@link overflowdb.storage.NodesWriter}) while the node was being
+   * changed: it is newer than the copy in storage, and than any copy another thread read from there since. A node
+   * removed from the graph stays detached.
+   */
+  public synchronized void reattach(N node) {
+    if (loading || this.node == node || graph.node(id) != this) return;
+    final boolean wasCleared = this.node == null;
+    this.node = node;
+    if (wasCleared) graph.registerNodeRef(this);
+  }
+
   @SuppressWarnings("unchecked")
   private final N readFromDisk() throws IOException {
     byte[] bytes = graph.storage.getSerializedNode(this.id);
