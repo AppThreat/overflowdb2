@@ -36,6 +36,9 @@ public class NodesWriter {
      * {@code parallel().map(serialize).sequential().forEach(persist)} therefore serialized on the calling thread too.
      * Nodes are now serialized in parallel one batch at a time, and each batch is written in iteration order (the order
      * of the old sequential pipeline) while the next batch serializes.
+     *
+     * <p>A node is only released from memory once its bytes are in storage: until then a concurrent reader that finds
+     * its reference cleared would read nothing, or an older version of the node, from disk.
      */
     public void writeAndClearBatched(Spliterator<? extends Node> nodes, int estimatedTotalCount) {
         final List<Node> all = new ArrayList<>(Math.max(estimatedTotalCount, 16));
@@ -49,7 +52,10 @@ public class NodesWriter {
             final int nextFrom = from + BATCH_SIZE;
             next = nextFrom < total ? serializeBatchAsync(all, nextFrom) : null;
             for (SerializedNode serializedNode : batch) {
-                if (serializedNode != null) storage.persist(serializedNode.id, serializedNode.data);
+                if (serializedNode != null) {
+                    storage.persist(serializedNode.ref.id(), serializedNode.data);
+                    serializedNode.release();
+                }
             }
         }
     }
@@ -87,8 +93,7 @@ public class NodesWriter {
         if (nodeDb != null && nodeDb.isDirty()) {
             try {
                 byte[] data = nodeSerializer.serialize(nodeDb);
-                NodeRef.clear(ref);
-                return new SerializedNode(ref.id(), data);
+                return new SerializedNode(ref, nodeDb, data);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -97,12 +102,22 @@ public class NodesWriter {
     }
 
     private static class SerializedNode {
-        private final long id;
+        private final NodeRef<?> ref;
+        private final NodeDb node;
         private final byte[] data;
 
-        private SerializedNode(long id, byte[] data) {
-            this.id = id;
+        private SerializedNode(NodeRef<?> ref, NodeDb node, byte[] data) {
+            this.ref = ref;
+            this.node = node;
             this.data = data;
+        }
+
+        /** Clears the reference once its node is persisted. A node changed since it was serialized stays in memory and
+         * is registered again, so that its newer state is written by a later clearing or when the graph closes. */
+        private void release() {
+            if (ref.getOption().orElse(null) != node) return;
+            if (node.isDirty()) ref.graph().registerNodeRef(ref);
+            else NodeRef.clear(ref);
         }
     }
 }
