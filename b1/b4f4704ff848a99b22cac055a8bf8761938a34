@@ -1,0 +1,28 @@
+core-tests/src/test/java/overflowdb/storage/NodesWriterConcurrencyTest.java
+  s_63c1cb61808304::t_1b0687795a7ce0 8,84-128
+  s_63c1cb61808304::t_67a769ecad2581 53-83,129-131
+core/src/main/java/overflowdb/NodeDb.java
+  s_63c1cb61808304::t_9f47b10a864f96 767
+core-tests/src/test/java/overflowdb/AdjacentNodesConcurrencyTest.java
+  s_63c1cb61808304::t_d339b64a633cd6 1-83
+core/src/main/java/overflowdb/storage/NodeSerializer.java
+  s_63c1cb61808304::t_95ac2974b6371e 43-49
+core/src/main/java/overflowdb/AdjacentNodes.java
+  s_63c1cb61808304::t_9f47b10a864f96 49-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b1b4f4704ff848a99b22cac055a8bf8761938a34",
+  "prompts": {},
+  "sessions": {
+    "s_63c1cb61808304": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ced2510-d837-4ffd-b689-82e442b358ec",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Prabhu Subramanian <prabhu@appthreat.com>"
+    }
+  }
+}
