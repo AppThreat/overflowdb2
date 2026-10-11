@@ -43,13 +43,12 @@ public abstract class NodeDb extends Node {
   @SuppressWarnings({"unchecked", "this-escape"})
   protected NodeDb(NodeRef<?> ref) {
     this.ref = ref;
+    adjacentNodes = new AdjacentNodes(layoutInformation().numberOfDifferentAdjacentTypes());
 
     ((NodeRef<NodeDb>) ref).setNode(this);
     if (ref.graph != null) {
       ref.graph.applyBackpressureMaybe();
     }
-
-    adjacentNodes = new AdjacentNodes(layoutInformation().numberOfDifferentAdjacentTypes());
   }
 
   public abstract NodeLayoutInformation layoutInformation();
@@ -177,8 +176,12 @@ public abstract class NodeDb extends Node {
     this.markAsDirty();
   }
 
+  @SuppressWarnings("unchecked")
   public void markAsDirty() {
     this.dirty = true;
+    /* NodesWriter clears a reference once its node is persisted. If that happened while this node was being changed,
+     * the change is only here: put the node back. */
+    if (!ref.holds(this)) ((NodeRef<NodeDb>) ref).reattach(this);
   }
 
   public void markAsClean() {
@@ -765,7 +768,7 @@ public abstract class NodeDb extends Node {
     Object[] nodesWithEdgePropertiesNew = new Object[newSize];
     System.arraycopy(nodesWithEdgePropertiesOld, 0, nodesWithEdgePropertiesNew, 0, insertAt);
     System.arraycopy(nodesWithEdgePropertiesOld, insertAt, nodesWithEdgePropertiesNew, insertAt + additionalEntriesCount, nodesWithEdgePropertiesOld.length - insertAt);
-    AdjacentNodes res = new AdjacentNodes(nodesWithEdgePropertiesNew, adjacentNodesOld.offsets);
+    AdjacentNodes res = adjacentNodesOld.withNodesWithEdgeProperties(nodesWithEdgePropertiesNew);
     // Increment all following start offsets by `additionalEntriesCount`.
     int until = res.offsetLengths();
     for (int i = offsetPos + 1; 2 * i < until; i++) {
