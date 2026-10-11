@@ -1,0 +1,26 @@
+build.sbt
+  s_63c1cb61808304::t_b06165d97a7a57 3
+core/src/main/java/overflowdb/storage/NodesWriter.java
+  s_63c1cb61808304::t_f10f548f54201e 90-91,121
+core/src/main/java/overflowdb/NodeRef.java
+  s_63c1cb61808304::t_f10f548f54201e 8,29-34,114-115,117,119-130,141,153-155,157-171
+core-tests/src/test/java/overflowdb/NodeRefConcurrencyTest.java
+  s_63c1cb61808304::t_f10f548f54201e 14-15,21,27,79-109
+  s_63c1cb61808304::t_9236017a066366 110-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a3ed0c6e7698a516f178495d024572746931d574",
+  "prompts": {},
+  "sessions": {
+    "s_63c1cb61808304": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ced2510-d837-4ffd-b689-82e442b358ec",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Prabhu Subramanian <prabhu@appthreat.com>"
+    }
+  }
+}
