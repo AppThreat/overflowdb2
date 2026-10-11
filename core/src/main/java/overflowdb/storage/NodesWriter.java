@@ -87,7 +87,8 @@ public class NodesWriter {
             ref = nodeDb.ref;
         } else if (node instanceof NodeRef) {
             ref = (NodeRef) node;
-            if (ref.isSet()) nodeDb = ref.get();
+            // not get(): a reference cleared meanwhile would load its node, and wait for this clearing to end
+            nodeDb = ref.getOption().orElse(null);
         }
 
         if (nodeDb != null && nodeDb.isDirty()) {
@@ -117,8 +118,7 @@ public class NodesWriter {
          * marked, otherwise by the change itself (NodeDb.markAsDirty), which then finds the reference cleared. */
         @SuppressWarnings("unchecked")
         private void release() {
-            if (ref.getOption().orElse(null) != node) return;
-            NodeRef.clear(ref);
+            if (!ref.clearIfHolds(node)) return;
             if (node.isDirty()) ((NodeRef<NodeDb>) ref).reattach(node);
         }
     }

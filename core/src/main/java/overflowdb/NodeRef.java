@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Function;
 
 /**
@@ -25,8 +26,12 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
   /* volatile: get() reads it without a lock, and must see a node only once it is complete */
   private volatile N node;
 
-  /* set while this ref deserializes its node; only the loading thread reads it (see getSynchronized) */
-  private boolean loading;
+  /* the thread that deserializes this ref's node right now, if any (see getSynchronized) */
+  private volatile Thread loader;
+
+  @SuppressWarnings("rawtypes")
+  private static final AtomicReferenceFieldUpdater<NodeRef, NodeDb> NODE =
+      AtomicReferenceFieldUpdater.newUpdater(NodeRef.class, NodeDb.class, "node");
 
   public NodeRef(final Graph graph, N node) {
     this.graph = graph;
@@ -106,17 +111,24 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
     } else {
       /* The node is published only once its properties and edges are deserialized: a thread that finds it set in
        * get() does not synchronize, and would otherwise see a node without (all of) its edges. */
-      final N node;
-      loading = true;
+      final N loaded;
+      loader = Thread.currentThread();
       try {
-        node = readFromDisk();
+        loaded = readFromDisk();
       } finally {
-        loading = false;
+        loader = null;
       }
-      if (node == null) throw new IllegalStateException("unable to read node from disk; id=" + id);
-      this.node = node;
-      graph.registerNodeRef(this);
-      return node;
+      if (loaded == null) throw new IllegalStateException("unable to read node from disk; id=" + id);
+      /* A node changed while it was being cleared may have been put back meanwhile (see reattach): it is newer than
+       * the copy just read. */
+      while (true) {
+        if (NODE.compareAndSet(this, null, loaded)) {
+          graph.registerNodeRef(this);
+          return loaded;
+        }
+        final N current = node;
+        if (current != null) return current;
+      }
     }
   }
 
@@ -126,7 +138,7 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
 
   /** Ignored while this ref deserializes its node, which getSynchronized publishes once complete. */
   public void setNode(N node) {
-    if (!loading) this.node = node;
+    if (loader != Thread.currentThread()) this.node = node;
   }
 
   /** Whether this reference currently holds the given node instance. */
@@ -138,12 +150,25 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
    * Puts back a node whose reference was cleared (see {@link overflowdb.storage.NodesWriter}) while the node was being
    * changed: it is newer than the copy in storage, and than any copy another thread read from there since. A node
    * removed from the graph stays detached.
+   *
+   * <p>Lock-free: NodesWriter calls this while ReferenceManager counts a clearing in progress, and a thread loading
+   * this ref's node holds its monitor while it waits for that clearing to end (Graph.applyBackpressureMaybe).
    */
-  public synchronized void reattach(N node) {
-    if (loading || this.node == node || graph.node(id) != this) return;
-    final boolean wasCleared = this.node == null;
-    this.node = node;
-    if (wasCleared) graph.registerNodeRef(this);
+  public void reattach(N node) {
+    if (loader == Thread.currentThread() || graph.node(id) != this) return;
+    while (true) {
+      final N current = this.node;
+      if (current == node) return;
+      if (NODE.compareAndSet(this, current, node)) {
+        if (current == null) graph.registerNodeRef(this);
+        return;
+      }
+    }
+  }
+
+  /** Clears this reference if it still holds the given node, see {@link overflowdb.storage.NodesWriter}. */
+  public boolean clearIfHolds(NodeDb node) {
+    return NODE.compareAndSet(this, node, null);
   }
 
   @SuppressWarnings("unchecked")
