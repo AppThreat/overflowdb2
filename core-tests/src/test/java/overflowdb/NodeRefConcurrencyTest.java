@@ -11,16 +11,20 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 
 /**
  * A node read back from disk by one thread is never visible to another without all of its properties and edges, as
  * happens when references are cleared under heap pressure while passes traverse the graph in parallel.
  */
+@SuppressWarnings("unchecked")
 public class NodeRefConcurrencyTest {
 
   private static final int COUNT = 20_000;
@@ -69,6 +73,40 @@ public class NodeRefConcurrencyTest {
       running.set(false);
       for (Thread thread : threads) thread.join();
       assertNull(failure.get());
+    }
+  }
+
+  @Test
+  public void reattachDoesNotWaitForALoadInProgress() throws Exception {
+    try (Graph graph = GratefulDead.newGraph()) {
+      final NodeRef<?> ref = (NodeRef<?>) graph.addNode(Song.label, Song.NAME, "song");
+      final NodeDb node = ref.get();
+      NodeRef.clear(ref);
+
+      // a thread loading the node holds the ref's monitor, and may wait there for the clearing that reattaches
+      final CountDownLatch holding = new CountDownLatch(1);
+      final CountDownLatch release = new CountDownLatch(1);
+      final Thread loader = new Thread(() -> {
+        synchronized (ref) {
+          holding.countDown();
+          try {
+            release.await();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        }
+      });
+      loader.start();
+      holding.await();
+      try {
+        final CompletableFuture<Void> reattached =
+            CompletableFuture.runAsync(() -> ((NodeRef<NodeDb>) ref).reattach(node));
+        reattached.get(5, TimeUnit.SECONDS);
+      } finally {
+        release.countDown();
+        loader.join();
+      }
+      assertSame(node, ref.get());
     }
   }
 
