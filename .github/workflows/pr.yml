@@ -1,6 +1,9 @@
 name: PR
+# pr is a required status check on main, so this workflow must trigger on
+# merge-group builds too.
 on:
   pull_request:
+  merge_group:
   workflow_dispatch:
 permissions: {}
 jobs:
