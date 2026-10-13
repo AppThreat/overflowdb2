@@ -1,0 +1,35 @@
+project/plugins.sbt
+  s_44a14d2470128d::t_1fed9baea9115e 1-3
+build.sbt
+  s_44a14d2470128d::t_30ebe0aac2c9bc 43
+  s_44a14d2470128d::t_792ce2610eb4a8 2-12,42,44-49,56
+.github/workflows/pr.yml
+  s_44a14d2470128d::t_b7b3afa2e3eb24 30-31
+traversal-tests/src/test/scala/overflowdb/GraphSugarTests.scala
+  s_44a14d2470128d::t_45d4f84023814e 114-116
+  s_44a14d2470128d::t_a5d6009eeaebac 105-113,117-119
+project/build.properties
+  s_44a14d2470128d::t_1fed9baea9115e 1
+.github/workflows/release.yml
+  s_44a14d2470128d::t_b7b3afa2e3eb24 37,40
+project/GithubPackages.scala
+  s_44a14d2470128d::t_fb312fc9b3c41f 1-40
+traversal/src/main/scala/overflowdb/package.scala
+  s_44a14d2470128d::t_444478d3f83497 6-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d03fa099cb1ef76f916de76040ddb906c750b6ae",
+  "prompts": {},
+  "sessions": {
+    "s_44a14d2470128d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "feb7d11a-3362-4661-8cf7-d6fc317c8261",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Prabhu Subramanian <prabhu@appthreat.com>"
+    }
+  }
+}
