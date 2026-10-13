@@ -8,7 +8,6 @@ libraryDependencies ++= Seq(
 )
 githubOwner := "appthreat"
 githubRepository := "overflowdb2"
-githubSuppressPublicationWarning := true
 credentials +=
   Credentials(
     "GitHub Package Registry",

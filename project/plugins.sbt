@@ -1,2 +1,3 @@
-addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.2")
-addSbtPlugin("com.codecommit" % "sbt-github-packages" % "0.5.3")
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.6.2")
+
+// sbt-github-packages has no sbt 2.x build; project/GithubPackages.scala covers it instead.

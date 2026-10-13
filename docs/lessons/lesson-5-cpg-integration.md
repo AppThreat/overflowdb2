@@ -9,7 +9,7 @@ Understand how the Code Property Graph (`cpg2` and `atom`) represents program se
 To follow this lesson, ensure the following software is installed on your system:
 
 - **JDK 23+**: Standard OpenJDK or GraalVM.
-- **SBT 1.10+**: Standard build utility.
+- **sbt 2.0+**: Standard build utility.
 - **Clones of cpg2 and atom**: Have clones of [cpg2](https://github.com/AppThreat/cpg2) and [atom](https://github.com/AppThreat/atom) repositories compiled locally.
 
 ### Conceptual Background

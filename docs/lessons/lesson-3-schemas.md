@@ -9,7 +9,7 @@ Learn how schemas define strongly-typed nodes, edges, properties, and constraint
 To follow this lesson, ensure the following software is installed on your system:
 
 - **JDK 23+**: Standard OpenJDK or GraalVM.
-- **SBT 1.10+**: Standard build utility.
+- **sbt 2.0+**: Standard build utility.
 - **Access to CPG2 Schemas**: Review [cpg2 schema source files](https://github.com/AppThreat/cpg2/tree/main/schema) to understand concrete implementations.
 
 ### Conceptual Background

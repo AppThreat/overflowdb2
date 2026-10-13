@@ -9,7 +9,7 @@ Export code property graphs or method subgraphs into standard serialization form
 To follow this lesson, ensure the following software is installed on your system:
 
 - **JDK 23+**: Standard OpenJDK or GraalVM.
-- **SBT 1.10+**: Standard build utility.
+- **sbt 2.0+**: Standard build utility.
 - **Graph Visualization Software**: Visualizers like Gephi (GraphML/GEXF), Graphviz (DOT), or Cytoscape to view the exported graphs.
 - **Neo4j instance (Optional)**: If testing bulk data ingestion using Neo4j CSV outputs.
 
