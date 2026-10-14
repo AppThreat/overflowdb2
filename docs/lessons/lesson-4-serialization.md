@@ -9,7 +9,7 @@ Leverage the serialization module of OverflowDB to import and export graphs usin
 To follow this lesson, ensure the following software is installed on your system:
 
 - **JDK 23+**: Standard OpenJDK or GraalVM.
-- **SBT 1.10+**: Standard build utility.
+- **sbt 2.0+**: Standard build utility.
 - **Graph Tools**: Graphviz (`dot`), Gephi, or Cytoscape to view the exported graphs.
 
 ### Conceptual Background

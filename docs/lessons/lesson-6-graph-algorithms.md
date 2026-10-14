@@ -9,7 +9,7 @@ Master and apply the graph-theoretic and utility algorithms built into OverflowD
 To follow this lesson, ensure the following software is installed on your system:
 
 - **JDK 23+**: Standard OpenJDK or GraalVM.
-- **SBT 1.10+**: Standard build utility.
+- **sbt 2.0+**: Standard build utility.
 - **Local clone of OverflowDB**: Clone the [overflowdb2 repository](https://github.com/AppThreat/overflowdb2) and run `sbt compile`.
 
 ---

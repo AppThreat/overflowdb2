@@ -9,7 +9,7 @@ Implement lazy, monadic graph queries using the OverflowDB traversal engine, wri
 To follow this lesson, ensure the following software is installed on your system:
 
 - **JDK 23+**: Standard OpenJDK or GraalVM.
-- **SBT 1.10+**: Standard build utility.
+- **sbt 2.0+**: Standard build utility.
 - **Scala Knowledge**: Basic understanding of functional iterators, implicit classes, and traits.
 
 ### Conceptual Background

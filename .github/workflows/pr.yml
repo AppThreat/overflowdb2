@@ -27,6 +27,7 @@ jobs:
             ~/.sbt
             ~/.coursier
           key: ${{ runner.os }}-sbt-${{ hashfiles('**/build.sbt') }}
-      - run: sbt +test
+      # sbt 2: --server runs sbt in-process, and testFull, unlike test, reruns unchanged suites
+      - run: sbt --server -batch testFull
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

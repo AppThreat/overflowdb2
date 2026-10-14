@@ -102,4 +102,19 @@ class GraphSugarTests extends AnyWordSpec {
     }
   }
 
+  "property key arrow".can {
+    "build a property from a key, and a tuple from anything else" in {
+      val property: Property[String] = Name -> "one thing"
+      property.key shouldBe Name
+      property.value shouldBe "one thing"
+
+      val tuple: (String, Int) = "one" -> 1
+      tuple shouldBe (("one", 1))
+      Map("one" -> 1, "two" -> 2) shouldBe Map(("one", 1), ("two", 2))
+      val (nested, pair) = (Name -> "nested", 1 -> 2)
+      nested.value shouldBe "nested"
+      pair shouldBe ((1, 2))
+    }
+  }
+
 }
