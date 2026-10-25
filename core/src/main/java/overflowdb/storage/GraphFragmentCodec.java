@@ -35,7 +35,45 @@ public class GraphFragmentCodec {
         }
     }
 
+    /** Reads the properties of a detached node that is not a {@link DetachedNodeGeneric}, such as the generated node
+     * classes of a domain. Returns null for a node it does not know. */
+    @FunctionalInterface
+    public interface PropertyReader {
+        Map<String, Object> properties(DetachedNodeData node);
+    }
+
+    private static final PropertyReader NO_READER = node -> null;
+
+    /** Thrown inside encode when the diff cannot be written exactly; encode then returns empty. */
+    private static final class Unencodable extends Exception {
+        Unencodable(String reason) {
+            super(reason, null, false, false);
+        }
+    }
+
+    /** Same as {@link #encode(BatchedUpdate.DiffOrBuilder, BoundaryResolver, long, PropertyReader)} for diffs whose
+     * nodes are all {@link DetachedNodeGeneric}. */
     public static Optional<byte[]> encode(BatchedUpdate.DiffOrBuilder diff, BoundaryResolver boundary, long schemaHash) {
+        return encode(diff, boundary, schemaHash, NO_READER);
+    }
+
+    /** Encodes an add-only, self-contained diff, or returns empty if the fragment would not hold the diff exactly:
+     * a change other than an added node or edge, an edge to a node outside the diff without a boundary key, a node
+     * whose properties neither DetachedNodeGeneric nor `reader` provide, or a property value of a type the format
+     * has no encoding for. A generic node's properties are read directly and every other node's through `reader`,
+     * once each; the codec uses no reflection, so it behaves the same on the JVM and in a native image. Scala
+     * collections are not supported as values: a reader for Scala nodes converts them to java.util.List. */
+    public static Optional<byte[]> encode(BatchedUpdate.DiffOrBuilder diff, BoundaryResolver boundary, long schemaHash,
+                                          PropertyReader reader) {
+        try {
+            return encodeOrRefuse(diff, boundary, schemaHash, reader);
+        } catch (Unencodable e) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<byte[]> encodeOrRefuse(BatchedUpdate.DiffOrBuilder diff, BoundaryResolver boundary,
+                                                   long schemaHash, PropertyReader reader) throws Unencodable {
         // Only allow DetachedNodeData and CreateEdge changes in add-only fragments
         for (Iterator<BatchedUpdate.Change> it = diff.iterator(); it.hasNext(); ) {
             BatchedUpdate.Change change = it.next();
@@ -80,6 +118,11 @@ public class GraphFragmentCodec {
                 return id;
             });
         };
+
+        List<Map<String, Object>> nodeProperties = new ArrayList<>(localNodes.size());
+        for (DetachedNodeData node : localNodes) {
+            nodeProperties.add(getProperties(node, reader));
+        }
 
         List<DecodedFragment.DecodedExport> exports = new ArrayList<>();
         for (int i = 0; i < localNodes.size(); i++) {
@@ -138,18 +181,19 @@ public class GraphFragmentCodec {
             //    Since we need index lookups, we register all strings during traversal, then serialize)
             //    Wait, to write glossary first, we can do a pre-scan to fill glossary, or we serialize into a temporary buffer first.
             //    A pre-scan is simple:
-            for (DetachedNodeData node : localNodes) {
-                getGlossaryId.applyAsInt(node.label());
-                Map<String, Object> props = getProperties(node);
-                for (String key : props.keySet()) {
+            for (int n = 0; n < localNodes.size(); n++) {
+                getGlossaryId.applyAsInt(localNodes.get(n).label());
+                for (String key : nodeProperties.get(n).keySet()) {
                     getGlossaryId.applyAsInt(key);
                 }
             }
             for (BatchedUpdate.CreateEdge edge : internalEdges) {
                 getGlossaryId.applyAsInt(edge.label);
-                if (edge.propertiesAndKeys != null) {
-                    for (int i = 0; i < edge.propertiesAndKeys.length; i += 2) {
-                        getGlossaryId.applyAsInt((String) edge.propertiesAndKeys[i]);
+                Object[] properties = edge.propertiesAndKeys;
+                if (properties != null) {
+                    checkKeyValues(properties, "edge " + edge.label);
+                    for (int i = 0; i < properties.length; i += 2) {
+                        getGlossaryId.applyAsInt((String) properties[i]);
                     }
                 }
             }
@@ -164,11 +208,11 @@ public class GraphFragmentCodec {
 
             // 2. Pack nodes
             packer.packArrayHeader(localNodes.size());
-            for (DetachedNodeData node : localNodes) {
+            for (int n = 0; n < localNodes.size(); n++) {
                 packer.packArrayHeader(2);
-                packer.packInt(getGlossaryId.applyAsInt(node.label()));
+                packer.packInt(getGlossaryId.applyAsInt(localNodes.get(n).label()));
 
-                Map<String, Object> properties = getProperties(node);
+                Map<String, Object> properties = nodeProperties.get(n);
                 packer.packMapHeader(properties.size());
                 for (Map.Entry<String, Object> entry : properties.entrySet()) {
                     packer.packInt(getGlossaryId.applyAsInt(entry.getKey()));
@@ -444,7 +488,7 @@ public class GraphFragmentCodec {
         };
     }
 
-    private static void packTypedValue(MessageBufferPacker packer, Object value, Map<Object, Integer> nodeToLocalId, ToIntFunction<String> getGlossaryId) throws IOException {
+    private static void packTypedValue(MessageBufferPacker packer, Object value, Map<Object, Integer> nodeToLocalId, ToIntFunction<String> getGlossaryId) throws IOException, Unencodable {
         packer.packArrayHeader(2);
         if (value == null) {
             packer.packByte(ValueTypes.UNKNOWN.id);
@@ -456,7 +500,7 @@ public class GraphFragmentCodec {
                 localId = nodeToLocalId.get(((NodeRef<?>) value).get());
             }
             if (localId == null) {
-                throw new UnsupportedOperationException("Cannot serialize reference to external node in properties: " + value);
+                throw new Unencodable("property refers to a node outside the fragment: " + value);
             }
             packer.packLong(localId);
         } else if (value instanceof Boolean) {
@@ -536,17 +580,8 @@ public class GraphFragmentCodec {
             boolean[] array = (boolean[]) value;
             packer.packArrayHeader(array.length);
             for (boolean b : array) packer.packBoolean(b);
-        } else if (value.getClass().getName().startsWith("scala.collection.")) {
-            // Scala collection-valued properties (e.g. list-typed CPG properties such as
-            // DYNAMIC_TYPE_HINT_FULL_NAME) are packed element-wise as an object array, matching how
-            // the graph store handles list properties. odb2 has no compile-time scala dependency, so
-            // the collection is iterated reflectively.
-            java.util.List<Object> list = scalaCollectionToList(value);
-            packer.packByte(ValueTypes.ARRAY_OBJECT.id);
-            packer.packArrayHeader(list.size());
-            for (Object o : list) packTypedValue(packer, o, nodeToLocalId, getGlossaryId);
         } else {
-            throw new UnsupportedOperationException("value of type " + value.getClass() + " not supported for serialization");
+            throw new Unencodable("no encoding for a value of " + value.getClass());
         }
     }
 
@@ -559,68 +594,31 @@ public class GraphFragmentCodec {
         }
     }
 
-    /** Reflectively iterate a scala collection into a java list (odb2 has no scala compile dep). */
-    private static java.util.List<Object> scalaCollectionToList(Object scalaColl) throws IOException {
-        try {
-            Object iterator = scalaColl.getClass().getMethod("iterator").invoke(scalaColl);
-            java.lang.reflect.Method hasNext = iterator.getClass().getMethod("hasNext");
-            java.lang.reflect.Method next = iterator.getClass().getMethod("next");
-            hasNext.setAccessible(true);
-            next.setAccessible(true);
-            java.util.List<Object> out = new java.util.ArrayList<>();
-            while ((Boolean) hasNext.invoke(iterator)) out.add(next.invoke(iterator));
-            return out;
-        } catch (Exception e) {
-            throw new IOException("Failed to iterate scala collection " + scalaColl.getClass() + ": " + e.getMessage());
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> getProperties(DetachedNodeData node) {
+    private static Map<String, Object> getProperties(DetachedNodeData node, PropertyReader reader) throws Unencodable {
         if (node instanceof DetachedNodeGeneric) {
             Object[] keyvalues = ((DetachedNodeGeneric) node).keyvalues;
-            Map<String, Object> map = new HashMap<>();
+            checkKeyValues(keyvalues, "node " + node.label());
+            Map<String, Object> map = new LinkedHashMap<>(keyvalues.length);
             for (int i = 0; i < keyvalues.length; i += 2) {
                 map.put((String) keyvalues[i], keyvalues[i + 1]);
             }
             return map;
         }
-
-        try {
-            try {
-                java.lang.reflect.Method method = node.getClass().getMethod("properties");
-                Object result = method.invoke(node);
-                if (result instanceof Map) {
-                    return (Map<String, Object>) result;
-                }
-                if (result != null && result.getClass().getName().startsWith("scala.collection.")) {
-                    try {
-                        Class<?> convertersClass = Class.forName("scala.jdk.javaapi.CollectionConverters");
-                        java.lang.reflect.Method asJavaMethod = convertersClass.getMethod("asJava", Class.forName("scala.collection.Map"));
-                        return (Map<String, Object>) asJavaMethod.invoke(null, result);
-                    } catch (Exception ex) {
-                        Class<?> convertersClass = Class.forName("scala.collection.JavaConverters");
-                        java.lang.reflect.Method mapAsJavaMapMethod = convertersClass.getMethod("mapAsJavaMap", Class.forName("scala.collection.Map"));
-                        return (Map<String, Object>) mapAsJavaMapMethod.invoke(null, result);
-                    }
-                }
-            } catch (NoSuchMethodException e) {
-                try {
-                    java.lang.reflect.Method method = node.getClass().getMethod("propertiesMap");
-                    return (Map<String, Object>) method.invoke(node);
-                } catch (NoSuchMethodException e2) {
-                    java.lang.reflect.Method method = node.getClass().getMethod("keyvalues");
-                    Object[] keyvalues = (Object[]) method.invoke(node);
-                    Map<String, Object> map = new HashMap<>();
-                    for (int i = 0; i < keyvalues.length; i += 2) {
-                        map.put((String) keyvalues[i], keyvalues[i + 1]);
-                    }
-                    return map;
-                }
-            }
-        } catch (Exception e) {
-            return Collections.emptyMap();
+        Map<String, Object> properties = reader.properties(node);
+        if (properties == null) {
+            throw new Unencodable("no properties for a node of " + node.getClass());
         }
-        return Collections.emptyMap();
+        return properties;
+    }
+
+    private static void checkKeyValues(Object[] keyvalues, String owner) throws Unencodable {
+        if (keyvalues.length % 2 != 0) {
+            throw new Unencodable(owner + " has a key without a value");
+        }
+        for (int i = 0; i < keyvalues.length; i += 2) {
+            if (!(keyvalues[i] instanceof String)) {
+                throw new Unencodable(owner + " has a property key that is not a string: " + keyvalues[i]);
+            }
+        }
     }
 }
