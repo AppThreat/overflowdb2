@@ -1,5 +1,5 @@
 ThisBuild / organization := "io.appthreat"
-ThisBuild / version      := "3.1.0"
+ThisBuild / version      := "3.1.1"
 ThisBuild / scalaVersion := "3.10.0"
 
 // sbt 2 applies bare settings to every subproject, so root-only settings live on the root project
