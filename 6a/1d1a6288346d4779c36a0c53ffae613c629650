@@ -1,0 +1,25 @@
+core/src/main/java/overflowdb/util/NodesList.java
+  s_e335fe820b41b8::t_0fdc0cd3ac6c2f 129
+  s_e335fe820b41b8::t_943ebeaae2e20e 70-74,78-82,128,130,135,209
+core-tests/src/test/java/overflowdb/util/NodesListTest.java
+  s_e335fe820b41b8::t_d0ae2d66d4980c 9,11-13,190-222
+  s_e335fe820b41b8::t_a9b51653310887 223
+build.sbt
+  s_e335fe820b41b8::t_99ff212b29a021 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6a1d1a6288346d4779c36a0c53ffae613c629650",
+  "prompts": {},
+  "sessions": {
+    "s_e335fe820b41b8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "120fe233-8899-4149-b780-6eac261dbd9d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Team AppThreat <cloud@appthreat.com>"
+    }
+  }
+}
