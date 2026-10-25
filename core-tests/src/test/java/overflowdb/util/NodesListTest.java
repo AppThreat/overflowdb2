@@ -6,7 +6,11 @@ import overflowdb.Config;
 import overflowdb.Graph;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Vector;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -182,6 +186,40 @@ public class NodesListTest {
   }
 
 
+
+  /** A node that has been added is found by id while another thread keeps adding nodes, as when a pass writer adds
+   * nodes while the pass's parts traverse the graph. */
+  @Test
+  public void lookupsDuringConcurrentAdds() throws Exception {
+    final int count = 300_000;
+    final NodesList nl = new NodesList(16);
+    final NodeRef[] refs = new NodeRef[count];
+    for (int i = 0; i < count; i++) refs[i] = createDummyRef(i, "A");
+    final AtomicInteger added = new AtomicInteger();
+    final AtomicReference<String> failure = new AtomicReference<>();
+    final List<Thread> readers = new ArrayList<>();
+    for (int r = 0; r < 3; r++) {
+      readers.add(new Thread(() -> {
+        final ThreadLocalRandom random = ThreadLocalRandom.current();
+        while (added.get() < count && failure.get() == null) {
+          final int known = added.get();
+          if (known == 0) continue;
+          final int id = random.nextInt(known);
+          if (nl.nodeById(id) != refs[id] || !nl.contains(id)) {
+            failure.compareAndSet(null, "node " + id + " not found after " + known + " adds");
+          }
+        }
+      }));
+    }
+    readers.forEach(Thread::start);
+    for (int i = 0; i < count && failure.get() == null; i++) {
+      nl.add(refs[i]);
+      added.set(i + 1);
+    }
+    added.set(count);
+    for (Thread t : readers) t.join();
+    assertNull(failure.get());
+  }
 
   private NodeRef createDummyRef(long id, String label) {
     return new NodeRef(dummyGraph, id) {

@@ -67,16 +67,19 @@ public class NodesList {
     return nextEmptySlot;
   }
 
-  public boolean contains(long id) {
+  /* Lookups take the same monitor as add/remove/compact. The trove map rehashes in place while a node is added, and
+   * a lookup racing that rehash can miss a node that is in the list. A pass writer adds nodes while the pass's parts
+   * traverse the graph, so a NodeRef built from an id (e.g. the OpNodes wrappers) could come out empty and then fail
+   * with "unable to read node from disk" for a node that was never written to disk. */
+  public synchronized boolean contains(long id) {
     return nodeIndexByNodeId.containsKey(id);
   }
 
-  public Node nodeById(long id) {
-    if (nodeIndexByNodeId.containsKey(id)) {
-      return nodes[nodeIndexByNodeId.get(id)];
-    } else {
-      return null;
-    }
+  public synchronized Node nodeById(long id) {
+    final int index = nodeIndexByNodeId.get(id);
+    // the map's no-entry value (0) is also a valid index
+    if (index == nodeIndexByNodeId.getNoEntryValue() && !nodeIndexByNodeId.containsKey(id)) return null;
+    return nodes[index];
   }
 
   public synchronized void remove(Node node) {
@@ -122,12 +125,14 @@ public class NodesList {
     }
   }
 
-  public ArrayList<Node> nodesByLabel(String label) {
+  /* The label map is mutated by add/remove and by computeIfAbsent below, so access to it is synchronized too. The
+   * returned list itself is live: iterating it while another thread adds nodes with that label is still unsafe. */
+  public synchronized ArrayList<Node> nodesByLabel(String label) {
     TMap<String, ArrayList<Node>> nodesByLabel = getNodesByLabel();
     return nodesByLabel.computeIfAbsent(label, k -> new ArrayList<>());
   }
 
-  public Set<String> nodeLabels() {
+  public synchronized Set<String> nodeLabels() {
     TMap<String, ArrayList<Node>> nodesByLabel = getNodesByLabel();
     Set<String> ret = new HashSet<>(nodesByLabel.size());
     nodesByLabel.forEach((key, value) -> {
@@ -201,7 +206,7 @@ public class NodesList {
     return nodes.length;
   }
 
-  public int cardinality(String label) {
+  public synchronized int cardinality(String label) {
     TMap<String, ArrayList<Node>> nodesByLabel = getNodesByLabel();
     if (nodesByLabel.containsKey(label))
       return nodesByLabel.get(label).size();
