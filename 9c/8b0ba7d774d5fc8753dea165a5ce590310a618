@@ -1,0 +1,22 @@
+core-tests/src/test/java/overflowdb/GraphFragmentCodecPropertiesTest.java
+  s_e335fe820b41b8::t_deeea432a741af 1-200,221-222
+  s_e335fe820b41b8::t_2b342e5e13d669 201-220
+core/src/main/java/overflowdb/storage/GraphFragmentCodec.java
+  s_e335fe820b41b8::t_5cc8b30a6c14c1 38-55,57-76,122-126,184-186,192-196,211,213,215,491,503,584,597,600-601,607-612,614-620
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9c8b0ba7d774d5fc8753dea165a5ce590310a618",
+  "prompts": {},
+  "sessions": {
+    "s_e335fe820b41b8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "120fe233-8899-4149-b780-6eac261dbd9d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Team AppThreat <cloud@appthreat.com>"
+    }
+  }
+}
