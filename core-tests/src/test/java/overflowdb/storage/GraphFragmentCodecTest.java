@@ -228,6 +228,41 @@ public class GraphFragmentCodecTest {
         }
     }
 
+    @Test
+    public void testAppliedFragmentCreatesNodesInDiffOrder() throws IOException {
+        try (Graph fromDiff = SimpleDomain.newGraph();
+             Graph fromFragment = SimpleDomain.newGraph()) {
+            BatchedUpdate.DiffGraphBuilder diffBuilder = new BatchedUpdate.DiffGraphBuilder();
+            DetachedNodeGeneric src = new DetachedNodeGeneric(TestNode.LABEL, TestNode.STRING_PROPERTY, "edge src");
+            DetachedNodeGeneric dst = new DetachedNodeGeneric(TestNode.LABEL, TestNode.STRING_PROPERTY, "edge dst");
+            diffBuilder.addNode(new DetachedNodeGeneric(TestNode.LABEL, TestNode.STRING_PROPERTY, "added before the edge"));
+            diffBuilder.addEdge(src, dst, TestEdge.LABEL);
+            diffBuilder.addNode(new DetachedNodeGeneric(TestNode.LABEL, TestNode.STRING_PROPERTY, "added after the edge"));
+            BatchedUpdate.DiffGraph diffGraph = diffBuilder.build();
+
+            DummyBoundaryResolver boundary = new DummyBoundaryResolver();
+            byte[] encodedBytes = GraphFragmentCodec.encode(diffGraph, boundary, SCHEMA_HASH).get();
+            BatchedUpdate.applyDiff(fromDiff, diffGraph);
+            BatchedUpdate.applyFragment(fromFragment, encodedBytes, SCHEMA_HASH, boundary, null);
+
+            assertEquals(
+                Arrays.asList("added before the edge", "edge src", "edge dst", "added after the edge"),
+                namesInIdOrder(fromDiff));
+            assertEquals(namesInIdOrder(fromDiff), namesInIdOrder(fromFragment));
+        }
+    }
+
+    private static List<String> namesInIdOrder(Graph graph) {
+        List<Node> nodes = new ArrayList<>();
+        graph.nodes().forEachRemaining(nodes::add);
+        nodes.sort(Comparator.comparingLong(Node::id));
+        List<String> names = new ArrayList<>();
+        for (Node node : nodes) {
+            names.add((String) node.property(TestNode.STRING_PROPERTY));
+        }
+        return names;
+    }
+
     private static int LargeLongToIntFallback(long val) {
         return (int) (val % Integer.MAX_VALUE);
     }

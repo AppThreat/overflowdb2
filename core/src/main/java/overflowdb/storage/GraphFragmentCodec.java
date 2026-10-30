@@ -84,26 +84,16 @@ public class GraphFragmentCodec {
 
         Map<Object, Integer> nodeToLocalId = new IdentityHashMap<>();
         List<DetachedNodeData> localNodes = new ArrayList<>();
+        // Number nodes in the order DiffGraphApplier.applyChange creates them, so an applied fragment
+        // gives them the same relative ids as applyDiff.
         for (Iterator<BatchedUpdate.Change> it = diff.iterator(); it.hasNext(); ) {
             BatchedUpdate.Change change = it.next();
             if (change instanceof DetachedNodeData) {
-                DetachedNodeData node = (DetachedNodeData) change;
-                if (!nodeToLocalId.containsKey(node)) {
-                    nodeToLocalId.put(node, localNodes.size());
-                    localNodes.add(node);
-                }
-            }
-        }
-        // Also include detached nodes that appear only as edge endpoints (never explicitly added as
-        // a node change). applyDiff materializes such endpoints, so they are genuinely part of the
-        // fragment; without this they would look "external" and make an otherwise self-contained
-        // fragment be refused (e.g. JS frontends reference BINDING/LOCAL nodes only via edges).
-        for (Iterator<BatchedUpdate.Change> it = diff.iterator(); it.hasNext(); ) {
-            BatchedUpdate.Change change = it.next();
-            if (change instanceof BatchedUpdate.CreateEdge) {
+                registerLocalNode((DetachedNodeData) change, nodeToLocalId, localNodes);
+            } else if (change instanceof BatchedUpdate.CreateEdge) {
                 BatchedUpdate.CreateEdge create = (BatchedUpdate.CreateEdge) change;
-                registerDetachedEndpoint(create.src, nodeToLocalId, localNodes);
-                registerDetachedEndpoint(create.dst, nodeToLocalId, localNodes);
+                registerLocalNode(create.src, nodeToLocalId, localNodes);
+                registerLocalNode(create.dst, nodeToLocalId, localNodes);
             }
         }
 
@@ -585,12 +575,10 @@ public class GraphFragmentCodec {
         }
     }
 
-    /** Register a detached edge endpoint as a fragment-local node if it is a DetachedNodeData that
-      * was not already collected (NodeRef endpoints are existing graph nodes - left external). */
-    private static void registerDetachedEndpoint(NodeOrDetachedNode endpoint, Map<Object, Integer> nodeToLocalId, List<DetachedNodeData> localNodes) {
-        if (endpoint instanceof DetachedNodeData && !nodeToLocalId.containsKey(endpoint)) {
-            nodeToLocalId.put(endpoint, localNodes.size());
-            localNodes.add((DetachedNodeData) endpoint);
+    private static void registerLocalNode(NodeOrDetachedNode node, Map<Object, Integer> nodeToLocalId, List<DetachedNodeData> localNodes) {
+        if (node instanceof DetachedNodeData && !nodeToLocalId.containsKey(node)) {
+            nodeToLocalId.put(node, localNodes.size());
+            localNodes.add((DetachedNodeData) node);
         }
     }
 
