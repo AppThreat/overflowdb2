@@ -179,30 +179,87 @@ public class FragmentNodeOrderTest {
 
     // ---- application variants --------------------------------------------------------------------------------
 
+    /** Edges to nodes outside the fragment are added in diff order among the internal ones, with their properties,
+     * so both the fragment's nodes and the external node list their edges as with applyDiff. */
     @Test
-    public void graphWithExistingNodesAndBoundaryEdges() throws Exception {
-        try (Graph fromDiff = SimpleDomain.newGraph(); Graph fromFragment = SimpleDomain.newGraph()) {
-            Node externalA = fromDiff.addNode(TestNode.LABEL, TestNode.STRING_PROPERTY, "external");
-            Node externalB = fromFragment.addNode(TestNode.LABEL, TestNode.STRING_PROPERTY, "external");
-            MapBoundary boundaryA = new MapBoundary().register(externalA, "ext");
-            MapBoundary boundaryB = new MapBoundary().register(externalB, "ext");
-
-            BatchedUpdate.DiffGraphBuilder diff = new BatchedUpdate.DiffGraphBuilder();
+    public void boundaryEdgesKeepTheirPlaceAmongInternalEdges() throws Exception {
+        BiRecipe recipe = (diff, external) -> {
             DetachedNodeGeneric src = generic("src");
-            DetachedNodeGeneric dst = generic("dst");
+            DetachedNodeGeneric a = generic("a");
+            DetachedNodeGeneric b = generic("b");
             diff.addNode(generic("first"));
-            diff.addEdge(src, dst, TestEdge.LABEL);
+            diff.addEdge(src, a, TestEdge.LABEL, TestEdge.LONG_PROPERTY, 1L);
+            diff.addEdge(src, external.get(0), TestEdge.LABEL, TestEdge.LONG_PROPERTY, 2L);
+            diff.addEdge(src, b, TestEdge.LABEL, TestEdge.LONG_PROPERTY, 3L);
+            diff.addEdge(b, external.get(1), TestEdge.LABEL);
+            diff.addEdge(a, external.get(0), TestEdge.LABEL, TestEdge.LONG_PROPERTY, 4L);
             diff.addNode(generic("last"));
-            diff.addEdge(dst, externalA, TestEdge.LABEL);
+            diff.addEdge(src, external.get(0), TestEdge.LABEL, TestEdge.LONG_PROPERTY, 5L);
+        };
+        Pair pair = applyBoth(recipe, 2, null, null);
+        assertEquals(Arrays.asList("external 0", "external 1", "first", "src", "a", "b", "last"), names(pair.fromDiff));
+        assertEquals(describe(pair.fromDiff), describe(pair.fromFragment));
+        assertEquals(pair.diffListener.events, pair.fragmentListener.events);
+        pair.close();
+    }
 
-            byte[] bytes = GraphFragmentCodec.encode(diff, boundaryA, SCHEMA_HASH, READER).get();
-            BatchedUpdate.applyDiff(fromDiff, diff);
-            BatchedUpdate.applyFragment(fromFragment, bytes, SCHEMA_HASH, boundaryB, null);
-
-            List<String> expected = Arrays.asList("external", "first", "src", "dst", "last");
-            assertEquals(expected, names(fromDiff));
-            assertEquals(describe(fromDiff), describe(fromFragment));
+    /** The resolver decides which boundary edges exist on the applying side: one it cannot resolve is not added,
+     * and nothing else changes. */
+    @Test
+    public void unresolvedBoundaryEdgeIsSkipped() throws Exception {
+        try (Graph source = SimpleDomain.newGraph(); Graph target = SimpleDomain.newGraph()) {
+            Node external = source.addNode(TestNode.LABEL, TestNode.STRING_PROPERTY, "external");
+            BatchedUpdate.DiffGraphBuilder diff = new BatchedUpdate.DiffGraphBuilder();
+            DetachedNodeGeneric a = generic("a");
+            diff.addNode(a).addEdge(a, external, TestEdge.LABEL).addNode(generic("b"));
+            byte[] bytes = GraphFragmentCodec.encode(diff, new MapBoundary().register(external, "ext"), SCHEMA_HASH, READER).get();
+            BatchedUpdate.AppliedDiff applied = BatchedUpdate.applyFragment(target, bytes, SCHEMA_HASH, new MapBoundary(), null);
+            assertEquals(Arrays.asList("a", "b"), names(target));
+            assertEquals(0, target.edgeCount());
+            assertEquals(2, applied.transitiveModifications());
         }
+    }
+
+    /** applyDiff gives a node whose refOrId is a Long that id, with or without a KeyPool. */
+    @Test
+    public void requestedIdsAreKept() throws Exception {
+        Consumer<BatchedUpdate.DiffGraphBuilder> recipe = diff -> {
+            DetachedNodeGeneric pinned = generic("pinned");
+            pinned.setRefOrId(500L);
+            DetachedTestNode pinnedHeld = new DetachedTestNode("pinned held");
+            pinnedHeld.setRefOrId(40L);
+            diff.addNode(generic("first"));
+            diff.addEdge(new DetachedTestNode("holder", pinnedHeld), pinned, TestEdge.LABEL);
+            diff.addNode(generic("last"));
+        };
+        try (Graph fromDiff = SimpleDomain.newGraph(); Graph fromFragment = SimpleDomain.newGraph()) {
+            BatchedUpdate.applyDiff(fromDiff, build(recipe));
+            BatchedUpdate.applyFragment(fromFragment, encode(recipe), SCHEMA_HASH, NO_BOUNDARY, null);
+            assertEquals(Arrays.asList(0L, 1L, 40L, 500L, 501L), ids(fromDiff));
+            assertEquals(describeWithIds(fromDiff), describeWithIds(fromFragment));
+        }
+        try (Graph fromDiff = SimpleDomain.newGraph(); Graph fromFragment = SimpleDomain.newGraph()) {
+            BatchedUpdate.applyDiff(fromDiff, build(recipe), new CountingKeyPool(1000), null);
+            BatchedUpdate.applyFragment(fromFragment, encode(recipe), SCHEMA_HASH, NO_BOUNDARY, new CountingKeyPool(1000));
+            assertEquals(Arrays.asList(40L, 500L, 1000L, 1001L, 1002L), ids(fromDiff));
+            assertEquals(describeWithIds(fromDiff), describeWithIds(fromFragment));
+        }
+    }
+
+    @Test
+    public void decodedPropertiesKeepTheirOrder() {
+        List<String> keys = Arrays.asList("zeta", "alpha", "mu", "beta", "omega", "gamma", "kappa", "delta");
+        Object[] keyValues = new Object[keys.size() * 2];
+        for (int i = 0; i < keys.size(); i++) {
+            keyValues[2 * i] = keys.get(i);
+            keyValues[2 * i + 1] = i;
+        }
+        DetachedNodeGeneric a = new DetachedNodeGeneric(TestNode.LABEL, keyValues);
+        DetachedNodeGeneric b = generic("b");
+        BatchedUpdate.DiffGraphBuilder diff = new BatchedUpdate.DiffGraphBuilder().addNode(a).addEdge(a, b, "EDGE", keyValues);
+        DecodedFragment decoded = GraphFragmentCodec.decode(GraphFragmentCodec.encode(diff, NO_BOUNDARY, SCHEMA_HASH).get());
+        assertEquals(keys, new ArrayList<>(decoded.nodes.get(0).properties.keySet()));
+        assertEquals(keys, new ArrayList<>(decoded.edges.get(0).properties.keySet()));
     }
 
     @Test
@@ -235,8 +292,9 @@ public class FragmentNodeOrderTest {
             RecordingListener fragmentListener = new RecordingListener();
             BatchedUpdate.applyDiff(fromDiff, build(recipe), null, diffListener);
             BatchedUpdate.applyFragment(fromFragment, encode(recipe), SCHEMA_HASH, NO_BOUNDARY, null, fragmentListener);
-            assertEquals(Arrays.asList("first", "src", "dst", "held", "last"), diffListener.initialized);
-            assertEquals(diffListener.initialized, fragmentListener.initialized);
+            assertEquals(Arrays.asList("init first", "init src", "init dst", "init held", "edge src -> dst", "init last", "finish"),
+                    diffListener.events);
+            assertEquals(diffListener.events, fragmentListener.events);
         }
     }
 
@@ -285,25 +343,31 @@ public class FragmentNodeOrderTest {
     // ---- generated diffs -------------------------------------------------------------------------------------
 
     /** Random add-only diffs over a pool of generic and non-generic nodes, some never added explicitly, some
-     * reachable only through properties, with property chains and cycles. */
+     * reachable only through properties, with property chains and cycles, requested ids, and edges to nodes outside
+     * the fragment. Compares ids, adjacency order and the listener's calls. */
     @Test
     public void randomDiffs() throws Exception {
         for (long seed = 0; seed < 500; seed++) {
             final long s = seed;
-            Consumer<BatchedUpdate.DiffGraphBuilder> recipe = diff -> randomDiff(new Random(s), diff);
-            try (Graph fromDiff = SimpleDomain.newGraph(); Graph fromFragment = SimpleDomain.newGraph()) {
-                BatchedUpdate.applyDiff(fromDiff, build(recipe));
-                BatchedUpdate.applyFragment(fromFragment, encode(recipe), SCHEMA_HASH, NO_BOUNDARY, null);
-                assertEquals("seed " + seed, describe(fromDiff), describe(fromFragment));
-            }
+            BiRecipe recipe = (diff, external) -> randomDiff(new Random(s), diff, external);
+            CountingKeyPool diffKeys = seed % 2 == 0 ? null : new CountingKeyPool(5000);
+            CountingKeyPool fragmentKeys = seed % 2 == 0 ? null : new CountingKeyPool(5000);
+            Pair pair = applyBoth(recipe, 3, diffKeys, fragmentKeys);
+            assertEquals("seed " + seed, describeWithIds(pair.fromDiff), describeWithIds(pair.fromFragment));
+            assertEquals("seed " + seed, pair.diffListener.events, pair.fragmentListener.events);
+            pair.close();
         }
     }
 
-    private static void randomDiff(Random random, BatchedUpdate.DiffGraphBuilder diff) {
+    private static void randomDiff(Random random, BatchedUpdate.DiffGraphBuilder diff, List<Node> external) {
         int poolSize = 2 + random.nextInt(14);
         List<DetachedNodeData> pool = new ArrayList<>();
         for (int i = 0; i < poolSize; i++) {
-            pool.add(random.nextInt(3) == 0 ? generic("n" + i) : new DetachedTestNode("n" + i));
+            DetachedNodeData node = random.nextInt(3) == 0 ? generic("n" + i) : new DetachedTestNode("n" + i);
+            // a positive requested id raises the graph's next automatic id, so it could collide with an automatic id
+            // handed out before it; negative ids never do
+            if (random.nextInt(5) == 0) node.setRefOrId(-1L - i);
+            pool.add(node);
         }
         for (DetachedNodeData node : pool) {
             if (node instanceof DetachedTestNode && random.nextInt(3) == 0) {
@@ -313,10 +377,11 @@ public class FragmentNodeOrderTest {
         int changes = 1 + random.nextInt(25);
         for (int i = 0; i < changes; i++) {
             DetachedNodeData a = pool.get(random.nextInt(poolSize));
-            if (random.nextInt(3) == 0) {
+            int kind = random.nextInt(4);
+            if (kind == 0) {
                 diff.addNode(a);
             } else {
-                DetachedNodeData b = pool.get(random.nextInt(poolSize));
+                NodeOrDetachedNode b = kind == 1 ? external.get(random.nextInt(external.size())) : pool.get(random.nextInt(poolSize));
                 if (random.nextBoolean()) diff.addEdge(a, b, TestEdge.LABEL);
                 else diff.addEdge(a, b, TestEdge.LABEL, TestEdge.LONG_PROPERTY, (long) i);
             }
@@ -324,6 +389,49 @@ public class FragmentNodeOrderTest {
     }
 
     // ---- helpers ---------------------------------------------------------------------------------------------
+
+    /** Builds a diff that may have edges to the given nodes outside the fragment. */
+    private interface BiRecipe {
+        void accept(BatchedUpdate.DiffGraphBuilder diff, List<Node> external);
+    }
+
+    private static final class Pair implements AutoCloseable {
+        final Graph fromDiff = SimpleDomain.newGraph();
+        final Graph fromFragment = SimpleDomain.newGraph();
+        final RecordingListener diffListener = new RecordingListener();
+        final RecordingListener fragmentListener = new RecordingListener();
+
+        @Override
+        public void close() {
+            fromDiff.close();
+            fromFragment.close();
+        }
+    }
+
+    /** Adds `externalCount` nodes to two graphs, applies the recipe's diff to one with applyDiff, and the fragment
+     * of a second copy to the other with applyFragment, each resolving boundary keys to its own external nodes. */
+    private static Pair applyBoth(BiRecipe recipe, int externalCount, BatchedUpdate.KeyPool diffKeys, BatchedUpdate.KeyPool fragmentKeys) {
+        Pair pair = new Pair();
+        List<Node> diffExternal = new ArrayList<>();
+        MapBoundary diffBoundary = new MapBoundary();
+        MapBoundary fragmentBoundary = new MapBoundary();
+        for (int i = 0; i < externalCount; i++) {
+            Node a = pair.fromDiff.addNode(TestNode.LABEL, TestNode.STRING_PROPERTY, "external " + i);
+            Node b = pair.fromFragment.addNode(TestNode.LABEL, TestNode.STRING_PROPERTY, "external " + i);
+            diffExternal.add(a);
+            diffBoundary.register(a, "ext" + i);
+            fragmentBoundary.register(b, "ext" + i);
+        }
+        BatchedUpdate.DiffGraphBuilder toEncode = new BatchedUpdate.DiffGraphBuilder();
+        recipe.accept(toEncode, diffExternal);
+        Optional<byte[]> bytes = GraphFragmentCodec.encode(toEncode, diffBoundary, SCHEMA_HASH, READER);
+        assertTrue("the diff was not encodable", bytes.isPresent());
+        BatchedUpdate.DiffGraphBuilder toApply = new BatchedUpdate.DiffGraphBuilder();
+        recipe.accept(toApply, diffExternal);
+        BatchedUpdate.applyDiff(pair.fromDiff, toApply, diffKeys, pair.diffListener);
+        BatchedUpdate.applyFragment(pair.fromFragment, bytes.get(), SCHEMA_HASH, fragmentBoundary, fragmentKeys, pair.fragmentListener);
+        return pair;
+    }
 
     private static BatchedUpdate.DiffGraph build(Consumer<BatchedUpdate.DiffGraphBuilder> recipe) {
         BatchedUpdate.DiffGraphBuilder diff = new BatchedUpdate.DiffGraphBuilder();
@@ -368,7 +476,7 @@ public class FragmentNodeOrderTest {
     }
 
     /** Each node in id order with its position instead of its id, its name, the position of the node its
-     * property holds, and its outgoing edges in order. Equal descriptions mean equal graphs with the same relative
+     * property holds, and its outgoing and incoming edges in order. Equal descriptions mean equal graphs with the same relative
      * node order. */
     private static List<String> describe(Graph graph) {
         List<Node> nodes = inIdOrder(graph);
@@ -388,6 +496,14 @@ public class FragmentNodeOrderTest {
                 Object value = edge.property(TestEdge.LONG_PROPERTY);
                 if (value != null) line.append('(').append(value).append(')');
                 line.append("-> ").append(position.get(edge.inNode().id()));
+            }
+            Iterator<Edge> inEdges = node.inE();
+            while (inEdges.hasNext()) {
+                Edge edge = inEdges.next();
+                line.append(" <-").append(edge.label());
+                Object value = edge.property(TestEdge.LONG_PROPERTY);
+                if (value != null) line.append('(').append(value).append(')');
+                line.append("- ").append(position.get(edge.outNode().id()));
             }
             lines.add(line.toString());
         }
@@ -424,19 +540,27 @@ public class FragmentNodeOrderTest {
     }
 
     private static final class RecordingListener implements BatchedUpdate.ModificationListener {
-        final List<String> initialized = new ArrayList<>();
+        final List<String> events = new ArrayList<>();
+
+        private static Object name(Node node) {
+            return node.property(TestNode.STRING_PROPERTY);
+        }
 
         @Override
         public void onAfterInitNewNode(Node node) {
-            initialized.add((String) node.property(TestNode.STRING_PROPERTY));
+            events.add("init " + name(node));
         }
 
-        @Override public void onAfterAddNewEdge(Edge edge) {}
-        @Override public void onBeforePropertyChange(Node node, String key) {}
-        @Override public void onAfterPropertyChange(Node node, String key, Object value) {}
-        @Override public void onBeforeRemoveNode(Node node) {}
-        @Override public void onBeforeRemoveEdge(Edge edge) {}
-        @Override public void finish() {}
+        @Override
+        public void onAfterAddNewEdge(Edge edge) {
+            events.add("edge " + name(edge.outNode()) + " -> " + name(edge.inNode()));
+        }
+
+        @Override public void onBeforePropertyChange(Node node, String key) { events.add("before " + key); }
+        @Override public void onAfterPropertyChange(Node node, String key, Object value) { events.add("after " + key); }
+        @Override public void onBeforeRemoveNode(Node node) { events.add("remove " + name(node)); }
+        @Override public void onBeforeRemoveEdge(Edge edge) { events.add("remove edge"); }
+        @Override public void finish() { events.add("finish"); }
     }
 
     private static final class MapBoundary implements BoundaryResolver {
