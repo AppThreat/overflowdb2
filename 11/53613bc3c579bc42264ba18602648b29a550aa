@@ -1,0 +1,22 @@
+README.md
+  h_0926447d100ad2 79,199
+core-tests/src/test/java/overflowdb/IndexManagerTest.java
+  h_0926447d100ad2 175-212
+core/src/main/java/overflowdb/NodeDb.java
+  h_0926447d100ad2 147-157,174-178
+core/src/main/java/overflowdb/ReferenceManager.java
+  h_0926447d100ad2 98-101,157-159
+core/src/main/java/overflowdb/util/HeapUsageMonitor.java
+  h_0926447d100ad2 27,30-38,155-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1153613bc3c579bc42264ba18602648b29a550aa",
+  "prompts": {},
+  "humans": {
+    "h_0926447d100ad2": {
+      "author": "Prabhu Subramanian <prabhu@appthreat.com>"
+    }
+  }
+}
