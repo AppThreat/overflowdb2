@@ -28,6 +28,8 @@ public class ReferenceManager implements AutoCloseable {
   private final OdbStorage storage;
   private final NodesWriter nodesWriter;
   private volatile HeapUsageMonitor heapUsageMonitor;
+  /** Set once the graph is closing: no eviction starts after it. */
+  private volatile boolean closing = false;
 
   private final Queue<NodeRef<?>> clearableRefs = new ConcurrentLinkedQueue<>();
 
@@ -54,14 +56,14 @@ public class ReferenceManager implements AutoCloseable {
    * monitor now hears of every collection, and young collections come in quick succession. The monitor asks again
    * after the next collection if the heap is still above the threshold. */
   public void triggerAsynchronousEviction() {
-    if (!evictionPending.compareAndSet(false, true)) return;
+    if (closing || !evictionPending.compareAndSet(false, true)) return;
     try {
       executorService.submit(() -> {
         try {
           /* Batches go on while the old generation is nearly full: a collection that would report it again may be
            * far off, under G1 a concurrent cycle, and allocation goes on meanwhile. The bound keeps a heap that is
            * full of something other than nodes from making this spin. */
-          for (int batch = 0; batch < MAX_BATCHES_PER_TRIGGER; batch++) {
+          for (int batch = 0; batch < MAX_BATCHES_PER_TRIGGER && !closing; batch++) {
             if (syncClearReferences(releaseCount) == 0) break;
             final HeapUsageMonitor monitor = heapUsageMonitor;
             if (monitor == null || !monitor.isNearlyFullNow()) break;
@@ -69,12 +71,40 @@ public class ReferenceManager implements AutoCloseable {
         } finally {
           final HeapUsageMonitor monitor = heapUsageMonitor;
           if (monitor != null) monitor.evicted();
-          evictionPending.set(false);
+          endEviction();
         }
       });
     } catch (java.util.concurrent.RejectedExecutionException e) {
       // shut down: the graph is closing
+      endEviction();
+    }
+  }
+
+  private void endEviction() {
+    synchronized (backPressureSyncObject) {
       evictionPending.set(false);
+      backPressureSyncObject.notifyAll();
+    }
+  }
+
+  /**
+   * Stops evicting, and waits for an eviction in progress to end. Called before the graph writes its nodes on close:
+   * an eviction takes its nodes off the queue before writing them, so close() would not write them, and the
+   * eviction's own writes would go to a store that close() had shut. The nodes were lost from the saved graph.
+   */
+  public void stopEvictions() {
+    closing = true;
+    final HeapUsageMonitor monitor = heapUsageMonitor;
+    if (monitor != null) monitor.close();
+    synchronized (backPressureSyncObject) {
+      while (evictionPending.get() || clearingProcessCount > 0) {
+        try {
+          backPressureSyncObject.wait(100);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          return;
+        }
+      }
     }
   }
 
@@ -193,6 +223,7 @@ public class ReferenceManager implements AutoCloseable {
   /** Writes every node in memory to storage, e.g. when the graph is closed. Throws if a node cannot be written: its
    * state would otherwise be lost. */
   public void clearAllReferences() {
+    stopEvictions();
     List<NodeRef<?>> allRefs = new ArrayList<>(clearableRefs.size());
     NodeRef<?> ref;
     while ((ref = clearableRefs.poll()) != null) {

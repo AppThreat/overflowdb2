@@ -32,9 +32,15 @@ public final class IndexManager {
      * nodes that get it later. */
     if (indexes.putIfAbsent(propertyName, new ConcurrentHashMap<>()) != null) return;
     dirtyFlags.put(propertyName, true);
+    /* Under the node's monitor, as NodeDb's property changes: a thread that sets the property meanwhile either
+     * finds the index and moves the node itself, or has set the value before it is read here. */
     graph.nodes.iterator().forEachRemaining(node -> {
-      Object value = node.property(propertyName);
-      if (value != null) put(propertyName, value, (NodeRef<?>) node);
+      final NodeRef<?> ref = (NodeRef<?>) node;
+      final NodeDb nodeDb = ref.get();
+      synchronized (nodeDb) {
+        Object value = nodeDb.property(propertyName);
+        if (value != null) put(propertyName, value, ref);
+      }
     });
   }
 

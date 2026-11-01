@@ -210,6 +210,39 @@ public class IndexManagerTest {
     }
   }
 
+  /** An index created while other threads change the property ends up with every node under its final value only.
+   * Before, the index read a node's old value while a thread set a new one and put the node under the old value
+   * after the thread had already moved it. */
+  @Test
+  public void indexCreatedWhileThePropertyChanges() throws Exception {
+    for (int round = 0; round < 20; round++) {
+      try (Graph graph = SimpleDomain.newGraph()) {
+        IndexManager indexManager = graph.indexManager;
+        final List<Node> nodes = new java.util.ArrayList<>();
+        for (int i = 0; i < 20_000; i++) nodes.add(graph.addNode(TestNode.LABEL, TestNode.STRING_PROPERTY, "old"));
+        final java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        final List<Thread> workers = new java.util.ArrayList<>();
+        for (int t = 0; t < 4; t++) {
+          final int offset = t;
+          workers.add(new Thread(() -> {
+            try {
+              start.await();
+            } catch (InterruptedException e) {
+              throw new RuntimeException(e);
+            }
+            for (int i = offset; i < nodes.size(); i += 4) nodes.get(i).setProperty(TestNode.STRING_PROPERTY, "new");
+          }));
+        }
+        workers.forEach(Thread::start);
+        start.countDown();
+        indexManager.createNodePropertyIndex(TestNode.STRING_PROPERTY);
+        for (Thread worker : workers) worker.join();
+        assertEquals("round " + round, 0, indexManager.lookup(TestNode.STRING_PROPERTY, "old").size());
+        assertEquals("round " + round, nodes.size(), indexManager.lookup(TestNode.STRING_PROPERTY, "new").size());
+      }
+    }
+  }
+
   private void assertEqualContents(List expected, List actual) {
     assertEquals(expected.size(), actual.size());
 

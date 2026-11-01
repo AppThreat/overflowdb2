@@ -144,16 +144,17 @@ public abstract class NodeDb extends Node {
   @Override
   protected void setPropertyImpl(String key, Object value) {
     final IndexManager indexManager = ref.graph.indexManager;
-    if (indexManager.isIndexed(key)) {
-      /* the old value is read and replaced in the index as one step: two threads setting the property at once would
-       * otherwise both remove the same old value, and leave the node indexed under the value that lost */
-      synchronized (this) {
+    /* The old value is read and replaced in the index as one step: two threads setting the property at once would
+     * otherwise both remove the same old value, and leave the node indexed under the value that lost. Whether the
+     * property is indexed is checked under the same monitor, which createNodePropertyIndex takes for each node. */
+    synchronized (this) {
+      if (indexManager.isIndexed(key)) {
         final Object oldValue = property(key);
         updateSpecificProperty(key, value);
         indexManager.replaceIfIndexed(key, oldValue, value, ref);
+      } else {
+        updateSpecificProperty(key, value);
       }
-    } else {
-      updateSpecificProperty(key, value);
     }
     /* marking as dirty *after* we updated - if node gets serialized before we finish, it'll be marked as dirty */
     this.markAsDirty();
