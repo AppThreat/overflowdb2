@@ -1,0 +1,27 @@
+core-tests/src/test/java/overflowdb/CloseDuringEvictionTest.java
+  s_bf0a61c31b2594::t_13b11b13f30eff 1-77
+core-tests/src/test/java/overflowdb/IndexManagerTest.java
+  s_bf0a61c31b2594::t_7886e7d0c8e994 213-245
+core/src/main/java/overflowdb/Config.java
+  s_bf0a61c31b2594::t_b4d35b6aecbaa8 20-21,48-50,109-110,114,118-122
+core/src/main/java/overflowdb/IndexManager.java
+  s_bf0a61c31b2594::t_47b17ca406c862 35-36,38-43
+core/src/main/java/overflowdb/NodeDb.java
+  s_bf0a61c31b2594::t_7dd65527500b8c 147-151,155-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a495a90a325c3186112608854eccb5529460f721",
+  "prompts": {},
+  "sessions": {
+    "s_bf0a61c31b2594": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0488d121-8c29-4478-a666-9e40427c2fac",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Prabhu Subramanian <prabhu@appthreat.com>"
+    }
+  }
+}
