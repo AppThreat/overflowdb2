@@ -18,7 +18,10 @@ import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageUnpacker;
 
 public class GraphFragmentCodec {
-    public static final int FORMAT_VERSION = 1;
+    /** 2: nodes are numbered in the order applyDiff creates them and carry the id the diff asked for, if any; edges
+     * and boundary refs carry their position in the diff, the number of nodes created before them, and their
+     * properties; properties keep their order. Version 1 fragments are refused rather than read. */
+    public static final int FORMAT_VERSION = 2;
     public static final int MAGIC = 0x46524147; // "FRAG"
 
     public static class FragmentHeader {
@@ -36,7 +39,10 @@ public class GraphFragmentCodec {
     }
 
     /** Reads the properties of a detached node that is not a {@link DetachedNodeGeneric}, such as the generated node
-     * classes of a domain. Returns null for a node it does not know. */
+     * classes of a domain. Returns null for a node it does not know. A property whose value is a detached node (or a
+     * list of them) makes that node part of the fragment, as applyDiff creates it when it initializes the node holding
+     * the property. List such properties in the order the node's initializer maps them, so the fragment numbers the
+     * nodes they point to in the order applyDiff creates them. */
     @FunctionalInterface
     public interface PropertyReader {
         Map<String, Object> properties(DetachedNodeData node);
@@ -82,30 +88,27 @@ public class GraphFragmentCodec {
             }
         }
 
-        Map<Object, Integer> nodeToLocalId = new IdentityHashMap<>();
-        List<DetachedNodeData> localNodes = new ArrayList<>();
+        LocalNumbering numbering = new LocalNumbering(reader);
+        List<BatchedUpdate.CreateEdge> edgesInOrder = new ArrayList<>();
+        List<Integer> nodesBeforeEdge = new ArrayList<>();
         for (Iterator<BatchedUpdate.Change> it = diff.iterator(); it.hasNext(); ) {
             BatchedUpdate.Change change = it.next();
             if (change instanceof DetachedNodeData) {
-                DetachedNodeData node = (DetachedNodeData) change;
-                if (!nodeToLocalId.containsKey(node)) {
-                    nodeToLocalId.put(node, localNodes.size());
-                    localNodes.add(node);
-                }
-            }
-        }
-        // Also include detached nodes that appear only as edge endpoints (never explicitly added as
-        // a node change). applyDiff materializes such endpoints, so they are genuinely part of the
-        // fragment; without this they would look "external" and make an otherwise self-contained
-        // fragment be refused (e.g. JS frontends reference BINDING/LOCAL nodes only via edges).
-        for (Iterator<BatchedUpdate.Change> it = diff.iterator(); it.hasNext(); ) {
-            BatchedUpdate.Change change = it.next();
-            if (change instanceof BatchedUpdate.CreateEdge) {
+                numbering.create((DetachedNodeData) change);
+                numbering.initializeCreated();
+            } else {
                 BatchedUpdate.CreateEdge create = (BatchedUpdate.CreateEdge) change;
-                registerDetachedEndpoint(create.src, nodeToLocalId, localNodes);
-                registerDetachedEndpoint(create.dst, nodeToLocalId, localNodes);
+                numbering.create(create.src);
+                numbering.create(create.dst);
+                numbering.initializeCreated();
+                // applyDiff adds the edge once its endpoints and the nodes they create are initialized
+                edgesInOrder.add(create);
+                nodesBeforeEdge.add(numbering.localNodes.size());
             }
         }
+        Map<Object, Integer> nodeToLocalId = numbering.nodeToLocalId;
+        List<DetachedNodeData> localNodes = numbering.localNodes;
+        List<Map<String, Object>> nodeProperties = numbering.nodeProperties;
 
         List<String> glossaryList = new ArrayList<>();
         Map<String, Integer> glossaryMap = new HashMap<>();
@@ -119,11 +122,6 @@ public class GraphFragmentCodec {
             });
         };
 
-        List<Map<String, Object>> nodeProperties = new ArrayList<>(localNodes.size());
-        for (DetachedNodeData node : localNodes) {
-            nodeProperties.add(getProperties(node, reader));
-        }
-
         List<DecodedFragment.DecodedExport> exports = new ArrayList<>();
         for (int i = 0; i < localNodes.size(); i++) {
             DetachedNodeData node = localNodes.get(i);
@@ -133,43 +131,46 @@ public class GraphFragmentCodec {
             }
         }
 
-        List<BatchedUpdate.CreateEdge> internalEdges = new ArrayList<>();
-        List<DecodedFragment.DecodedBoundaryRef> boundaryRefs = new ArrayList<>();
+        // An edge's position in the diff and the number of nodes applyDiff has created before it, so that
+        // applyFragment can add internal and boundary edges in diff order, interleaved with node creation.
+        List<PendingEdge> internalEdges = new ArrayList<>();
+        List<PendingEdge> boundaryRefs = new ArrayList<>();
 
-        for (Iterator<BatchedUpdate.Change> it = diff.iterator(); it.hasNext(); ) {
-            BatchedUpdate.Change change = it.next();
-            if (change instanceof BatchedUpdate.CreateEdge) {
-                BatchedUpdate.CreateEdge create = (BatchedUpdate.CreateEdge) change;
-                Integer srcLocal = nodeToLocalId.get(create.src);
-                if (srcLocal == null && create.src instanceof NodeRef) {
-                    srcLocal = nodeToLocalId.get(((NodeRef<?>) create.src).get());
-                }
-                if (srcLocal == null) {
-                    // Edge from a node outside this fragment: the fragment is not self-contained and
-                    // would be lossy. Refuse to encode so the caller recomputes rather than caching a
-                    // graph with silently dropped edges.
-                    return Optional.empty();
-                }
+        for (int position = 0; position < edgesInOrder.size(); position++) {
+            BatchedUpdate.CreateEdge create = edgesInOrder.get(position);
+            int nodesBefore = nodesBeforeEdge.get(position);
+            Integer srcLocal = nodeToLocalId.get(create.src);
+            if (srcLocal == null && create.src instanceof NodeRef) {
+                srcLocal = nodeToLocalId.get(((NodeRef<?>) create.src).get());
+            }
+            if (srcLocal == null) {
+                // Edge from a node outside this fragment: the fragment is not self-contained and
+                // would be lossy. Refuse to encode so the caller recomputes rather than caching a
+                // graph with silently dropped edges.
+                return Optional.empty();
+            }
 
-                Integer dstLocal = nodeToLocalId.get(create.dst);
-                if (dstLocal == null && create.dst instanceof NodeRef) {
-                    dstLocal = nodeToLocalId.get(((NodeRef<?>) create.dst).get());
-                }
+            Integer dstLocal = nodeToLocalId.get(create.dst);
+            if (dstLocal == null && create.dst instanceof NodeRef) {
+                dstLocal = nodeToLocalId.get(((NodeRef<?>) create.dst).get());
+            }
 
-                if (dstLocal != null) {
-                    internalEdges.add(create);
+            if (create.propertiesAndKeys != null) {
+                checkKeyValues(create.propertiesAndKeys, "edge " + create.label);
+            }
+            if (dstLocal != null) {
+                internalEdges.add(new PendingEdge(create, srcLocal, dstLocal, null, position, nodesBefore));
+            } else {
+                NodeOrDetachedNode dstNode = create.dst;
+                Optional<SymbolicKey> keyOpt = boundary.getSymbolicKey(dstNode);
+                if ((keyOpt == null || !keyOpt.isPresent()) && dstNode instanceof NodeRef) {
+                    keyOpt = boundary.getSymbolicKey(((NodeRef<?>) dstNode).get());
+                }
+                if (keyOpt != null && keyOpt.isPresent()) {
+                    boundaryRefs.add(new PendingEdge(create, srcLocal, -1, keyOpt.get(), position, nodesBefore));
                 } else {
-                    NodeOrDetachedNode dstNode = create.dst;
-                    Optional<SymbolicKey> keyOpt = boundary.getSymbolicKey(dstNode);
-                    if ((keyOpt == null || !keyOpt.isPresent()) && dstNode instanceof NodeRef) {
-                        keyOpt = boundary.getSymbolicKey(((NodeRef<?>) dstNode).get());
-                    }
-                    if (keyOpt != null && keyOpt.isPresent()) {
-                        boundaryRefs.add(new DecodedFragment.DecodedBoundaryRef(srcLocal, create.label, keyOpt.get()));
-                    } else {
-                        // Dangling edge to an external node with no boundary key: not self-contained.
-                        return Optional.empty();
-                    }
+                    // Dangling edge to an external node with no boundary key: not self-contained.
+                    return Optional.empty();
                 }
             }
         }
@@ -187,18 +188,16 @@ public class GraphFragmentCodec {
                     getGlossaryId.applyAsInt(key);
                 }
             }
-            for (BatchedUpdate.CreateEdge edge : internalEdges) {
-                getGlossaryId.applyAsInt(edge.label);
-                Object[] properties = edge.propertiesAndKeys;
-                if (properties != null) {
-                    checkKeyValues(properties, "edge " + edge.label);
-                    for (int i = 0; i < properties.length; i += 2) {
-                        getGlossaryId.applyAsInt((String) properties[i]);
+            for (List<PendingEdge> edges : List.of(internalEdges, boundaryRefs)) {
+                for (PendingEdge edge : edges) {
+                    getGlossaryId.applyAsInt(edge.create.label);
+                    Object[] properties = edge.create.propertiesAndKeys;
+                    if (properties != null) {
+                        for (int i = 0; i < properties.length; i += 2) {
+                            getGlossaryId.applyAsInt((String) properties[i]);
+                        }
                     }
                 }
-            }
-            for (DecodedFragment.DecodedBoundaryRef ref : boundaryRefs) {
-                getGlossaryId.applyAsInt(ref.label);
             }
 
             packer.packArrayHeader(glossaryList.size());
@@ -208,9 +207,11 @@ public class GraphFragmentCodec {
 
             // 2. Pack nodes
             packer.packArrayHeader(localNodes.size());
+            // [label, properties, requested id or nil]
             for (int n = 0; n < localNodes.size(); n++) {
-                packer.packArrayHeader(2);
-                packer.packInt(getGlossaryId.applyAsInt(localNodes.get(n).label()));
+                DetachedNodeData node = localNodes.get(n);
+                packer.packArrayHeader(3);
+                packer.packInt(getGlossaryId.applyAsInt(node.label()));
 
                 Map<String, Object> properties = nodeProperties.get(n);
                 packer.packMapHeader(properties.size());
@@ -218,40 +219,38 @@ public class GraphFragmentCodec {
                     packer.packInt(getGlossaryId.applyAsInt(entry.getKey()));
                     packTypedValue(packer, entry.getValue(), nodeToLocalId, getGlossaryId);
                 }
-            }
 
-            // 3. Pack edges
-            packer.packArrayHeader(internalEdges.size());
-            for (BatchedUpdate.CreateEdge edge : internalEdges) {
-                packer.packArrayHeader(4);
-                Integer srcLocal = nodeToLocalId.get(edge.src);
-                if (srcLocal == null && edge.src instanceof NodeRef) srcLocal = nodeToLocalId.get(((NodeRef<?>) edge.src).get());
-                Integer dstLocal = nodeToLocalId.get(edge.dst);
-                if (dstLocal == null && edge.dst instanceof NodeRef) dstLocal = nodeToLocalId.get(((NodeRef<?>) edge.dst).get());
-
-                packer.packInt(srcLocal);
-                packer.packInt(dstLocal);
-                packer.packInt(getGlossaryId.applyAsInt(edge.label));
-
-                Object[] properties = edge.propertiesAndKeys;
-                if (properties == null || properties.length == 0) {
-                    packer.packMapHeader(0);
+                // applyDiff gives a node whose refOrId is a Long that id
+                Object refOrId = node.getRefOrId();
+                if (refOrId instanceof Long) {
+                    packer.packLong((Long) refOrId);
                 } else {
-                    packer.packMapHeader(properties.length / 2);
-                    for (int i = 0; i < properties.length; i += 2) {
-                        packer.packInt(getGlossaryId.applyAsInt((String) properties[i]));
-                        packTypedValue(packer, properties[i + 1], nodeToLocalId, getGlossaryId);
-                    }
+                    packer.packNil();
                 }
             }
 
-            // 4. Pack boundaryRefs
+            // 3. Pack edges: [src, dst, label, properties, position, nodesBefore]
+            packer.packArrayHeader(internalEdges.size());
+            for (PendingEdge edge : internalEdges) {
+                packer.packArrayHeader(6);
+                packer.packInt(edge.srcLocal);
+                packer.packInt(edge.dstLocal);
+                packer.packInt(getGlossaryId.applyAsInt(edge.create.label));
+                packEdgeProperties(packer, edge.create.propertiesAndKeys, nodeToLocalId, getGlossaryId);
+                packer.packInt(edge.position);
+                packer.packInt(edge.nodesBefore);
+            }
+
+            // 4. Pack boundaryRefs: [src, label, key, properties, position, nodesBefore]
             packer.packArrayHeader(boundaryRefs.size());
-            for (DecodedFragment.DecodedBoundaryRef ref : boundaryRefs) {
-                packer.packArrayHeader(3);
+            for (PendingEdge ref : boundaryRefs) {
+                packer.packArrayHeader(6);
                 packer.packInt(ref.srcLocal);
-                packer.packInt(getGlossaryId.applyAsInt(ref.label));
+                packer.packInt(getGlossaryId.applyAsInt(ref.create.label));
                 packer.packString(ref.key.key());
+                packEdgeProperties(packer, ref.create.propertiesAndKeys, nodeToLocalId, getGlossaryId);
+                packer.packInt(ref.position);
+                packer.packInt(ref.nodesBefore);
             }
 
             // 5. Pack exports
@@ -335,53 +334,45 @@ public class GraphFragmentCodec {
             List<DecodedFragment.DecodedNode> nodes = new ArrayList<>(nodesSize);
             for (int i = 0; i < nodesSize; i++) {
                 int nodeArraySize = unpacker.unpackArrayHeader();
-                if (nodeArraySize != 2) {
+                if (nodeArraySize != 3) {
                     throw new IOException("Invalid node array size: " + nodeArraySize);
                 }
                 String label = glossary[unpacker.unpackInt()];
-
-                int propertyCount = unpacker.unpackMapHeader();
-                Map<String, Object> properties = new HashMap<>(propertyCount);
-                for (int p = 0; p < propertyCount; p++) {
-                    String key = glossary[unpacker.unpackInt()];
-                    Object value = unpackDirectValue(unpacker, glossary);
-                    properties.put(key, value);
-                }
-                nodes.add(new DecodedFragment.DecodedNode(label, properties));
+                Map<String, Object> properties = unpackProperties(unpacker, glossary);
+                Long requestedId = unpacker.tryUnpackNil() ? null : unpacker.unpackLong();
+                nodes.add(new DecodedFragment.DecodedNode(label, properties, requestedId));
             }
 
             int edgesSize = unpacker.unpackArrayHeader();
             List<DecodedFragment.DecodedEdge> edges = new ArrayList<>(edgesSize);
             for (int i = 0; i < edgesSize; i++) {
                 int edgeArraySize = unpacker.unpackArrayHeader();
-                if (edgeArraySize != 4) {
+                if (edgeArraySize != 6) {
                     throw new IOException("Invalid edge array size: " + edgeArraySize);
                 }
                 int srcLocal = unpacker.unpackInt();
                 int dstLocal = unpacker.unpackInt();
                 String label = glossary[unpacker.unpackInt()];
-
-                int propertyCount = unpacker.unpackMapHeader();
-                Map<String, Object> properties = new HashMap<>(propertyCount);
-                for (int p = 0; p < propertyCount; p++) {
-                    String key = glossary[unpacker.unpackInt()];
-                    Object value = unpackDirectValue(unpacker, glossary);
-                    properties.put(key, value);
-                }
-                edges.add(new DecodedFragment.DecodedEdge(srcLocal, dstLocal, label, properties));
+                Map<String, Object> properties = unpackProperties(unpacker, glossary);
+                int position = unpacker.unpackInt();
+                int nodesBefore = unpacker.unpackInt();
+                edges.add(new DecodedFragment.DecodedEdge(srcLocal, dstLocal, label, properties, position, nodesBefore));
             }
 
             int boundaryRefsSize = unpacker.unpackArrayHeader();
             List<DecodedFragment.DecodedBoundaryRef> boundaryRefs = new ArrayList<>(boundaryRefsSize);
             for (int i = 0; i < boundaryRefsSize; i++) {
                 int boundaryRefArraySize = unpacker.unpackArrayHeader();
-                if (boundaryRefArraySize != 3) {
+                if (boundaryRefArraySize != 6) {
                     throw new IOException("Invalid boundaryRef array size: " + boundaryRefArraySize);
                 }
                 int srcLocal = unpacker.unpackInt();
                 String label = glossary[unpacker.unpackInt()];
                 SymbolicKey key = new SymbolicKey(unpacker.unpackString());
-                boundaryRefs.add(new DecodedFragment.DecodedBoundaryRef(srcLocal, label, key));
+                Map<String, Object> properties = unpackProperties(unpacker, glossary);
+                int position = unpacker.unpackInt();
+                int nodesBefore = unpacker.unpackInt();
+                boundaryRefs.add(new DecodedFragment.DecodedBoundaryRef(srcLocal, label, key, properties, position, nodesBefore));
             }
 
             int exportsSize = unpacker.unpackArrayHeader();
@@ -400,6 +391,36 @@ public class GraphFragmentCodec {
         } catch (IOException e) {
             throw new RuntimeException("Failed to decode GraphFragment", e);
         }
+    }
+
+    /** Properties in the order they were written, which is the order applyDiff sets them in. */
+    private static Map<String, Object> unpackProperties(MessageUnpacker unpacker, String[] glossary) throws IOException {
+        int propertyCount = unpacker.unpackMapHeader();
+        Map<String, Object> properties = new LinkedHashMap<>(propertyCount);
+        for (int p = 0; p < propertyCount; p++) {
+            String key = glossary[unpacker.unpackInt()];
+            properties.put(key, unpackDirectValue(unpacker, glossary));
+        }
+        return properties;
+    }
+
+    private static void packEdgeProperties(MessageBufferPacker packer, Object[] properties, Map<Object, Integer> nodeToLocalId,
+                                           ToIntFunction<String> getGlossaryId) throws IOException, Unencodable {
+        if (properties == null || properties.length == 0) {
+            packer.packMapHeader(0);
+            return;
+        }
+        packer.packMapHeader(properties.length / 2);
+        for (int i = 0; i < properties.length; i += 2) {
+            packer.packInt(getGlossaryId.applyAsInt((String) properties[i]));
+            packTypedValue(packer, properties[i + 1], nodeToLocalId, getGlossaryId);
+        }
+    }
+
+    /** An edge of the diff with its local endpoints (or boundary key), its position among the diff's edges, and how
+     * many nodes applyDiff has created before adding it. */
+    private record PendingEdge(BatchedUpdate.CreateEdge create, int srcLocal, int dstLocal, SymbolicKey key,
+                               int position, int nodesBefore) {
     }
 
     private static Object unpackDirectValue(MessageUnpacker unpacker, String[] glossary) throws IOException {
@@ -585,12 +606,56 @@ public class GraphFragmentCodec {
         }
     }
 
-    /** Register a detached edge endpoint as a fragment-local node if it is a DetachedNodeData that
-      * was not already collected (NodeRef endpoints are existing graph nodes - left external). */
-    private static void registerDetachedEndpoint(NodeOrDetachedNode endpoint, Map<Object, Integer> nodeToLocalId, List<DetachedNodeData> localNodes) {
-        if (endpoint instanceof DetachedNodeData && !nodeToLocalId.containsKey(endpoint)) {
-            nodeToLocalId.put(endpoint, localNodes.size());
-            localNodes.add((DetachedNodeData) endpoint);
+    /**
+     * Gives the detached nodes of a diff fragment-local ids in the order applyDiff creates them, so that a graph built
+     * by applyFragment numbers its nodes like one built by applyDiff. It follows {@code DiffGraphApplier}: a node is
+     * created at its own change or at the first edge naming it (src before dst), whichever comes first. After each
+     * change the nodes created so far are initialized in creation order. Initializing a node that is not a
+     * {@link DetachedNodeGeneric} creates the detached nodes its properties point to, in the order its reader lists
+     * them, and those are initialized in turn. A generic node's properties are attached as they are and create no
+     * nodes.
+     */
+    private static final class LocalNumbering {
+        final Map<Object, Integer> nodeToLocalId = new IdentityHashMap<>();
+        final List<DetachedNodeData> localNodes = new ArrayList<>();
+        final List<Map<String, Object>> nodeProperties = new ArrayList<>();
+        private final PropertyReader reader;
+        private int initialized = 0;
+
+        LocalNumbering(PropertyReader reader) {
+            this.reader = reader;
+        }
+
+        /** Gives `node` the next local id unless it has one or is not detached (a node already in the graph). */
+        void create(Object node) {
+            if (node instanceof DetachedNodeData && !nodeToLocalId.containsKey(node)) {
+                nodeToLocalId.put(node, localNodes.size());
+                localNodes.add((DetachedNodeData) node);
+            }
+        }
+
+        /** Initializes every node created but not yet initialized, including those that initializing creates. */
+        void initializeCreated() throws Unencodable {
+            while (initialized < localNodes.size()) {
+                DetachedNodeData node = localNodes.get(initialized++);
+                Map<String, Object> properties = getProperties(node, reader);
+                nodeProperties.add(properties);
+                if (!(node instanceof DetachedNodeGeneric)) {
+                    for (Object value : properties.values()) {
+                        createReferenced(value);
+                    }
+                }
+            }
+        }
+
+        private void createReferenced(Object value) {
+            if (value instanceof DetachedNodeData) {
+                create(value);
+            } else if (value instanceof List) {
+                for (Object element : (List<?>) value) createReferenced(element);
+            } else if (value instanceof Object[]) {
+                for (Object element : (Object[]) value) createReferenced(element);
+            }
         }
     }
 
