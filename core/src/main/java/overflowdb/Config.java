@@ -17,6 +17,8 @@ public class Config {
     private static final int defaultCacheSize = 256; // 256 MB
     private static final int defaultPageSplitSize = 64 * 1024; // 64 KB
     private Optional<Integer> cacheSize = Optional.empty();
+    /** Whether the cache size was set with {@link #withCacheSize}, rather than being the default. */
+    private boolean cacheSizeExplicit = false;
     private Optional<Integer> pageSplitSize = Optional.empty();
     private StorageCompressionMode compressionMode = defaultCompressionMode();
     private boolean glossaryPreinitEnabled = true;
@@ -43,9 +45,9 @@ public class Config {
 
 
     public static Config withDefaults() {
-        return new Config()
-                .withCacheSize(defaultCacheSize)
-                .withPageSplitSize(defaultPageSplitSize);
+        final Config config = new Config().withPageSplitSize(defaultPageSplitSize);
+        config.cacheSize = Optional.of(defaultCacheSize);
+        return config;
     }
 
     public static Config withoutOverflow() {
@@ -104,12 +106,18 @@ public class Config {
     }
 
     /**
-     * Set the cache size for MVStore in MB.
-     * Default is 1024 MB.
+     * Set the size of MVStore's page cache in MB. The cache is on the heap. The default is 256 MB, capped at a tenth
+     * of the maximum heap; a size set here is used as given.
      */
     public Config withCacheSize(int cacheSizeMB) {
         this.cacheSize = Optional.of(cacheSizeMB);
+        this.cacheSizeExplicit = true;
         return this;
+    }
+
+    /** Whether the cache size was set with {@link #withCacheSize}. A default size is capped by the heap. */
+    public boolean isCacheSizeExplicit() {
+        return cacheSizeExplicit;
     }
 
     /**

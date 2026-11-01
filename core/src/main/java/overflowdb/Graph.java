@@ -250,6 +250,8 @@ public final class Graph implements AutoCloseable {
     }
 
     private void shutdownNow() {
+        // an eviction in progress writes to storage: let it finish before the nodes are saved and storage is closed
+        if (referenceManager != null) referenceManager.stopEvictions();
         try {
             if (config.getStorageLocation().isPresent()) {
 

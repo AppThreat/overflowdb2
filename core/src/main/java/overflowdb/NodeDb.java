@@ -38,6 +38,16 @@ public abstract class NodeDb extends Node {
    */
   private volatile boolean dirty;
 
+  /** Counts changes (see markAsDirty), so that NodesWriter can tell whether storage holds the current state. */
+  private volatile int odbChangeCount;
+
+  /** The change count storage holds; -1 for none. A node is only released without writing it when this is odbChangeCount. */
+  private volatile int odbPersistedChangeCount = -1;
+
+  @SuppressWarnings("rawtypes")
+  private static final java.util.concurrent.atomic.AtomicIntegerFieldUpdater<NodeDb> CHANGE_COUNT =
+      java.util.concurrent.atomic.AtomicIntegerFieldUpdater.newUpdater(NodeDb.class, "odbChangeCount");
+
   private static final String[] ALL_LABELS = new String[0];
 
   @SuppressWarnings({"unchecked", "this-escape"})
@@ -46,7 +56,9 @@ public abstract class NodeDb extends Node {
     adjacentNodes = new AdjacentNodes(layoutInformation().numberOfDifferentAdjacentTypes());
 
     ((NodeRef<NodeDb>) ref).setNode(this);
-    if (ref.graph != null) {
+    /* Not while the node is read back from disk: that adds nothing eviction could keep up with, and the loading
+     * thread holds the ref's monitor, which others wait for meanwhile. */
+    if (ref.graph != null && !ref.isLoadingOnThisThread()) {
       ref.graph.applyBackpressureMaybe();
     }
   }
@@ -131,8 +143,19 @@ public abstract class NodeDb extends Node {
 
   @Override
   protected void setPropertyImpl(String key, Object value) {
-    updateSpecificProperty(key, value);
-    ref.graph.indexManager.putIfIndexed(key, value, ref);
+    final IndexManager indexManager = ref.graph.indexManager;
+    /* The old value is read and replaced in the index as one step: two threads setting the property at once would
+     * otherwise both remove the same old value, and leave the node indexed under the value that lost. Whether the
+     * property is indexed is checked under the same monitor, which createNodePropertyIndex takes for each node. */
+    synchronized (this) {
+      if (indexManager.isIndexed(key)) {
+        final Object oldValue = property(key);
+        updateSpecificProperty(key, value);
+        indexManager.replaceIfIndexed(key, oldValue, value, ref);
+      } else {
+        updateSpecificProperty(key, value);
+      }
+    }
     /* marking as dirty *after* we updated - if node gets serialized before we finish, it'll be marked as dirty */
     this.markAsDirty();
   }
@@ -149,9 +172,11 @@ public abstract class NodeDb extends Node {
 
   @Override
   protected void removePropertyImpl(String key) {
-    Object oldValue = property(key);
-    removeSpecificProperty(key);
-    ref.graph.indexManager.remove(key, oldValue, ref);
+    synchronized (this) {
+      Object oldValue = property(key);
+      removeSpecificProperty(key);
+      ref.graph.indexManager.remove(key, oldValue, ref);
+    }
     /* marking as dirty *after* we updated - if node gets serialized before we finish, it'll be marked as dirty */
     this.markAsDirty();
   }
@@ -162,8 +187,13 @@ public abstract class NodeDb extends Node {
 
   @Override
   protected void removeImpl() {
+    /* A self-loop is both an out-edge and an in-edge of this node, and bothE() returns it once for each. Its in-edge
+     * copy is skipped: removing the out-edge removes both of its slots. */
     final List<Edge> edges = new ArrayList<>();
-    bothE().forEachRemaining(edges::add);
+    outE().forEachRemaining(edges::add);
+    inE().forEachRemaining(edge -> {
+      if (edge.outNode().id() != ref.id()) edges.add(edge);
+    });
     for (Edge edge : edges) {
       if (!edge.isRemoved()) {
         edge.removeInternal();
@@ -178,6 +208,7 @@ public abstract class NodeDb extends Node {
 
   @SuppressWarnings("unchecked")
   public void markAsDirty() {
+    CHANGE_COUNT.incrementAndGet(this);
     this.dirty = true;
     /* NodesWriter clears a reference once its node is persisted. If that happened while this node was being changed,
      * the change is only here: put the node back. */
@@ -186,6 +217,25 @@ public abstract class NodeDb extends Node {
 
   public void markAsClean() {
     this.dirty = false;
+  }
+
+  /* The three methods below have names no schema property can generate: domain classes add an accessor named after
+   * each property (cpg2's Dependency and MetaData have a `version`), and these must not clash with them. */
+
+  /** The number of changes so far. Read it before serializing, and pass it to {@link #markPersistedAt} once the bytes
+   * are in storage: a change made after the read makes the node count as not persisted. */
+  public final int _changeCount() {
+    return odbChangeCount;
+  }
+
+  /** Storage now holds this node as of `changeCount`. Only NodesWriter and NodeDeserializer call this. */
+  public final void markPersistedAt(int changeCount) {
+    if (changeCount > odbPersistedChangeCount) odbPersistedChangeCount = changeCount;
+  }
+
+  /** Whether this node can be released from memory without writing it: storage holds it unchanged. */
+  public final boolean isPersistedAndClean() {
+    return !dirty && odbPersistedChangeCount == odbChangeCount;
   }
 
   public <V> Iterator<V> getEdgeProperties(Direction direction,

@@ -67,6 +67,7 @@ public class NodeDeserializer extends BookKeeper {
             deserializeEdges(unpacker, node, Direction.IN);
 
             node.markAsClean();
+            node.markPersistedAt(node._changeCount());
 
             if (statsEnabled) recordStatistics(startTimeNanos);
             return node;

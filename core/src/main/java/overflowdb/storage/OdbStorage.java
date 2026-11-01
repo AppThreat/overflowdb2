@@ -273,7 +273,8 @@ public class OdbStorage implements AutoCloseable {
         }
 
         if (config.getCacheSize().isPresent()) {
-            builder.cacheSize(config.getCacheSize().get());
+            final int cacheSize = config.getCacheSize().get();
+            builder.cacheSize(config.isCacheSizeExplicit() ? cacheSize : effectiveCacheSizeMB(cacheSize, Runtime.getRuntime().maxMemory()));
         }
         if (config.getPageSplitSize().isPresent()) {
             builder.pageSplitSize(config.getPageSplitSize().get());
@@ -358,5 +359,19 @@ public class OdbStorage implements AutoCloseable {
         });
 
         return new ArrayList<>(libraryVersionsByRunId.values());
+    }
+
+    /** Share of the heap the MVStore page cache may take at most. */
+    static final int MAX_CACHE_HEAP_PERCENT = 10;
+
+    /**
+     * MVStore's page cache lives on the heap. Nodes that are evicted and read back fill it, and at the default of
+     * 256 MB it took a 256 MB heap: atom ran out of memory once eviction started. The default is therefore capped at a
+     * tenth of the heap, which keeps it on heaps of 2.5 GB and above. A size set with Config.withCacheSize is not.
+     */
+    static int effectiveCacheSizeMB(int configuredMB, long maxHeapBytes) {
+        if (maxHeapBytes <= 0 || maxHeapBytes == Long.MAX_VALUE) return configuredMB;
+        final long capMB = Math.max(1, (maxHeapBytes >> 20) * MAX_CACHE_HEAP_PERCENT / 100);
+        return (int) Math.min(configuredMB, capMB);
     }
 }
