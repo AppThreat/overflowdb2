@@ -18,7 +18,10 @@ import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageUnpacker;
 
 public class GraphFragmentCodec {
-    public static final int FORMAT_VERSION = 1;
+    /** 2: nodes are numbered in the order applyDiff creates them. Version 1 fragments hold the same nodes and edges
+     * but number explicitly added nodes before nodes that appear only as edge endpoints, so a graph built from one
+     * orders its node ids differently from one built from the diff. They are refused rather than read. */
+    public static final int FORMAT_VERSION = 2;
     public static final int MAGIC = 0x46524147; // "FRAG"
 
     public static class FragmentHeader {
@@ -36,7 +39,10 @@ public class GraphFragmentCodec {
     }
 
     /** Reads the properties of a detached node that is not a {@link DetachedNodeGeneric}, such as the generated node
-     * classes of a domain. Returns null for a node it does not know. */
+     * classes of a domain. Returns null for a node it does not know. A property whose value is a detached node (or a
+     * list of them) makes that node part of the fragment, as applyDiff creates it when it initializes the node holding
+     * the property. List such properties in the order the node's initializer maps them, so the fragment numbers the
+     * nodes they point to in the order applyDiff creates them. */
     @FunctionalInterface
     public interface PropertyReader {
         Map<String, Object> properties(DetachedNodeData node);
@@ -82,30 +88,21 @@ public class GraphFragmentCodec {
             }
         }
 
-        Map<Object, Integer> nodeToLocalId = new IdentityHashMap<>();
-        List<DetachedNodeData> localNodes = new ArrayList<>();
+        LocalNumbering numbering = new LocalNumbering(reader);
         for (Iterator<BatchedUpdate.Change> it = diff.iterator(); it.hasNext(); ) {
             BatchedUpdate.Change change = it.next();
             if (change instanceof DetachedNodeData) {
-                DetachedNodeData node = (DetachedNodeData) change;
-                if (!nodeToLocalId.containsKey(node)) {
-                    nodeToLocalId.put(node, localNodes.size());
-                    localNodes.add(node);
-                }
-            }
-        }
-        // Also include detached nodes that appear only as edge endpoints (never explicitly added as
-        // a node change). applyDiff materializes such endpoints, so they are genuinely part of the
-        // fragment; without this they would look "external" and make an otherwise self-contained
-        // fragment be refused (e.g. JS frontends reference BINDING/LOCAL nodes only via edges).
-        for (Iterator<BatchedUpdate.Change> it = diff.iterator(); it.hasNext(); ) {
-            BatchedUpdate.Change change = it.next();
-            if (change instanceof BatchedUpdate.CreateEdge) {
+                numbering.create((DetachedNodeData) change);
+            } else {
                 BatchedUpdate.CreateEdge create = (BatchedUpdate.CreateEdge) change;
-                registerDetachedEndpoint(create.src, nodeToLocalId, localNodes);
-                registerDetachedEndpoint(create.dst, nodeToLocalId, localNodes);
+                numbering.create(create.src);
+                numbering.create(create.dst);
             }
+            numbering.initializeCreated();
         }
+        Map<Object, Integer> nodeToLocalId = numbering.nodeToLocalId;
+        List<DetachedNodeData> localNodes = numbering.localNodes;
+        List<Map<String, Object>> nodeProperties = numbering.nodeProperties;
 
         List<String> glossaryList = new ArrayList<>();
         Map<String, Integer> glossaryMap = new HashMap<>();
@@ -118,11 +115,6 @@ public class GraphFragmentCodec {
                 return id;
             });
         };
-
-        List<Map<String, Object>> nodeProperties = new ArrayList<>(localNodes.size());
-        for (DetachedNodeData node : localNodes) {
-            nodeProperties.add(getProperties(node, reader));
-        }
 
         List<DecodedFragment.DecodedExport> exports = new ArrayList<>();
         for (int i = 0; i < localNodes.size(); i++) {
@@ -585,12 +577,56 @@ public class GraphFragmentCodec {
         }
     }
 
-    /** Register a detached edge endpoint as a fragment-local node if it is a DetachedNodeData that
-      * was not already collected (NodeRef endpoints are existing graph nodes - left external). */
-    private static void registerDetachedEndpoint(NodeOrDetachedNode endpoint, Map<Object, Integer> nodeToLocalId, List<DetachedNodeData> localNodes) {
-        if (endpoint instanceof DetachedNodeData && !nodeToLocalId.containsKey(endpoint)) {
-            nodeToLocalId.put(endpoint, localNodes.size());
-            localNodes.add((DetachedNodeData) endpoint);
+    /**
+     * Gives the detached nodes of a diff fragment-local ids in the order applyDiff creates them, so that a graph built
+     * by applyFragment numbers its nodes like one built by applyDiff. It follows {@code DiffGraphApplier}: a node is
+     * created at its own change or at the first edge naming it (src before dst), whichever comes first. After each
+     * change the nodes created so far are initialized in creation order. Initializing a node that is not a
+     * {@link DetachedNodeGeneric} creates the detached nodes its properties point to, in the order its reader lists
+     * them, and those are initialized in turn. A generic node's properties are attached as they are and create no
+     * nodes.
+     */
+    private static final class LocalNumbering {
+        final Map<Object, Integer> nodeToLocalId = new IdentityHashMap<>();
+        final List<DetachedNodeData> localNodes = new ArrayList<>();
+        final List<Map<String, Object>> nodeProperties = new ArrayList<>();
+        private final PropertyReader reader;
+        private int initialized = 0;
+
+        LocalNumbering(PropertyReader reader) {
+            this.reader = reader;
+        }
+
+        /** Gives `node` the next local id unless it has one or is not detached (a node already in the graph). */
+        void create(Object node) {
+            if (node instanceof DetachedNodeData && !nodeToLocalId.containsKey(node)) {
+                nodeToLocalId.put(node, localNodes.size());
+                localNodes.add((DetachedNodeData) node);
+            }
+        }
+
+        /** Initializes every node created but not yet initialized, including those that initializing creates. */
+        void initializeCreated() throws Unencodable {
+            while (initialized < localNodes.size()) {
+                DetachedNodeData node = localNodes.get(initialized++);
+                Map<String, Object> properties = getProperties(node, reader);
+                nodeProperties.add(properties);
+                if (!(node instanceof DetachedNodeGeneric)) {
+                    for (Object value : properties.values()) {
+                        createReferenced(value);
+                    }
+                }
+            }
+        }
+
+        private void createReferenced(Object value) {
+            if (value instanceof DetachedNodeData) {
+                create(value);
+            } else if (value instanceof List) {
+                for (Object element : (List<?>) value) createReferenced(element);
+            } else if (value instanceof Object[]) {
+                for (Object element : (Object[]) value) createReferenced(element);
+            }
         }
     }
 

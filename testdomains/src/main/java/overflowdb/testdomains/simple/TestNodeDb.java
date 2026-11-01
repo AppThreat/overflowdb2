@@ -1,10 +1,13 @@
 package overflowdb.testdomains.simple;
 
+import overflowdb.DetachedNodeData;
+import overflowdb.Node;
 import overflowdb.NodeLayoutInformation;
 import overflowdb.NodeRef;
 import overflowdb.NodeDb;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class TestNodeDb extends NodeDb {
@@ -44,6 +47,17 @@ public class TestNodeDb extends NodeDb {
 
   public TestNode containedTestNode() {
     return _containedTestNode;
+  }
+
+  @Override
+  protected void _initializeFromDetached(DetachedNodeData data, Function<DetachedNodeData, Node> mapper) {
+    DetachedTestNode detached = (DetachedTestNode) data;
+    this._stringProperty = detached.stringProperty;
+    Object contained = detached.containedTestNode;
+    if (contained instanceof DetachedNodeData) {
+      contained = mapper.apply((DetachedNodeData) contained);
+    }
+    this._containedTestNode = (TestNode) contained;
   }
 
   @Override
