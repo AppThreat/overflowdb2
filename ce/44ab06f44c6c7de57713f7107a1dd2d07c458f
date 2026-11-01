@@ -1,0 +1,24 @@
+core-tests/src/test/java/overflowdb/EvictionDeadlockTest.java
+  h_0926447d100ad2 1-66
+core/src/main/java/overflowdb/NodeDb.java
+  h_0926447d100ad2 42,44-45,48-49,198,209-215,218-220,225
+core/src/main/java/overflowdb/ReferenceManager.java
+  h_0926447d100ad2 22-23,30,61-68,70-71,93-100,103-104,106-107,109,111-112,121-122,127
+core/src/main/java/overflowdb/storage/NodeDeserializer.java
+  h_0926447d100ad2 70
+core/src/main/java/overflowdb/storage/NodesWriter.java
+  h_0926447d100ad2 13-14,30-45,159,164,183,216
+core/src/main/java/overflowdb/util/HeapUsageMonitor.java
+  h_0926447d100ad2 27-28,30-36,39-40,50-52,58-60,65-66,68-73,76-94,102,130-132,134-138,141-160,162-170,187,189-190,192-211,215-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ce44ab06f44c6c7de57713f7107a1dd2d07c458f",
+  "prompts": {},
+  "humans": {
+    "h_0926447d100ad2": {
+      "author": "Prabhu Subramanian <prabhu@appthreat.com>"
+    }
+  }
+}
