@@ -141,6 +141,11 @@ public abstract class NodeRef<N extends NodeDb> extends Node {
     if (loader != Thread.currentThread()) this.node = node;
   }
 
+  /** Whether this thread is deserializing this ref's node right now, holding the ref's monitor. */
+  boolean isLoadingOnThisThread() {
+    return loader == Thread.currentThread();
+  }
+
   /** Whether this reference currently holds the given node instance. */
   boolean holds(NodeDb node) {
     return this.node == node;

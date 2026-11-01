@@ -4,12 +4,20 @@ import java.util.concurrent.ThreadFactory;
 
 public class NamedThreadFactory implements ThreadFactory {
   private final String threadName;
-  public NamedThreadFactory(String threadName) {
+  private final boolean daemon;
 
+  public NamedThreadFactory(String threadName) {
+    this(threadName, false);
+  }
+
+  public NamedThreadFactory(String threadName, boolean daemon) {
     this.threadName = threadName;
+    this.daemon = daemon;
   }
 
   public Thread newThread(Runnable r) {
-    return new Thread(r, threadName);
+    Thread thread = new Thread(r, threadName);
+    thread.setDaemon(daemon);
+    return thread;
   }
 }

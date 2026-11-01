@@ -76,7 +76,7 @@ import overflowdb.Graph;
 Config config = Config.withDefaults()
     .withStorageLocation("/tmp/cpg.bin") // Enable disk overflow
     .withHeapPercentageThreshold(80)      // Start swapping to disk when Heap > 80%
-    .withCacheSize(128)                  // 128MB Off-heap cache for MVStore
+    .withCacheSize(128)                  // 128MB MVStore page cache (on the heap, at most a tenth of it)
     .withStorageCompressionMode(Config.StorageCompressionMode.LZF);
 
 // Register your factories
@@ -196,7 +196,7 @@ The Scala traversal DSL provides standard graph steps and optimized custom steps
 | Config Option               | Default    | Description                                                                                                                                                               |
 | :-------------------------- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `heapPercentageThreshold`   | `80`       | When JVM Heap usage exceeds this percentage, ReferenceManager begins clearing strong references to nodes, turning them into NodeRef pointers and persisting data to disk. |
-| `cacheSize`                 | `256` (MB) | The amount of RAM H2 MVStore is allowed to use for off-heap caching of the string dictionary and raw node bytes.                                                          |
+| `cacheSize`                 | `256` (MB) | The MVStore page cache for nodes read back from disk. It is on the heap, and capped at a tenth of the maximum heap.                                                        |
 | `serializationStatsEnabled` | `false`    | Set to true to debug serialization throughput performance.                                                                                                                |
 | `storageCompressionMode`    | `DEFLATE`  | The compression algorithm used for the persistent store. Options are NONE, LZF, and DEFLATE.                                                                              |
 

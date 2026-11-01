@@ -116,6 +116,7 @@ public abstract class Edge extends Element {
     fixupBlockOffsets();
     outNode.get().removeEdge(Direction.OUT, label(), outBlockOffset);
     inNode.get().removeEdge(Direction.IN, label(), inBlockOffset);
+    removed = true;
   }
 
   @Override

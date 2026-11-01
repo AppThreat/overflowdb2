@@ -28,7 +28,9 @@ public final class IndexManager {
    */
   public void createNodePropertyIndex(final String propertyName) {
     checkPropertyName(propertyName);
-    if (indexes.containsKey(propertyName)) return;
+    /* The index exists from here on, also when no node has the property yet: otherwise putIfIndexed would ignore the
+     * nodes that get it later. */
+    if (indexes.putIfAbsent(propertyName, new ConcurrentHashMap<>()) != null) return;
     dirtyFlags.put(propertyName, true);
     graph.nodes.iterator().forEachRemaining(node -> {
       Object value = node.property(propertyName);
@@ -46,6 +48,7 @@ public final class IndexManager {
   }
 
   private void loadNodePropertyIndex(final String propertyName, Map<Object, long[]> valueToNodeIds) {
+    indexes.putIfAbsent(propertyName, new ConcurrentHashMap<>());
     dirtyFlags.put(propertyName, false);
     valueToNodeIds.entrySet().parallelStream().forEach(entry ->
             LongStream.of(entry.getValue())
@@ -53,16 +56,30 @@ public final class IndexManager {
   }
 
   public void putIfIndexed(final String key, final Object newValue, final NodeRef<?> nodeRef) {
-    if (indexes.containsKey(key)) {
+    if (newValue != null && indexes.containsKey(key)) {
       dirtyFlags.put(key, true);
       put(key, newValue, nodeRef);
     }
   }
 
+  /** Moves a node from its old value of an indexed property to its new one; does nothing for a property that is not
+   * indexed. A null value is not indexed. */
+  void replaceIfIndexed(final String key, final Object oldValue, final Object newValue, final NodeRef<?> nodeRef) {
+    if (!indexes.containsKey(key)) return;
+    if (oldValue != null && !oldValue.equals(newValue)) remove(key, oldValue, nodeRef);
+    putIfIndexed(key, newValue, nodeRef);
+  }
+
+  /* put and remove change a value's set inside compute, so a removal that empties and drops the set cannot race an
+   * addition to it. */
   private void put(final String key, final Object value, final NodeRef<?> nodeRef) {
-    Map<Object, Set<NodeRef<?>>> keyMap = indexes.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
-    Set<NodeRef<?>> objects = keyMap.computeIfAbsent(value, k -> ConcurrentHashMap.newKeySet());
-    objects.add(nodeRef);
+    final Map<Object, Set<NodeRef<?>>> keyMap = indexes.get(key);
+    if (keyMap == null) return; // dropped meanwhile
+    keyMap.compute(value, (k, objects) -> {
+      if (objects == null) objects = ConcurrentHashMap.newKeySet();
+      objects.add(nodeRef);
+      return objects;
+    });
   }
 
   /**
@@ -95,16 +112,13 @@ public final class IndexManager {
   }
 
   void remove(final String key, final Object value, final NodeRef<?> nodeRef) {
-    dirtyFlags.put(key, true);
     final Map<Object, Set<NodeRef<?>>> keyMap = indexes.get(key);
-    if (null != keyMap) {
-      Set<NodeRef<?>> objects = keyMap.get(value);
-      if (null != objects) {
+    if (null != keyMap && null != value) {
+      dirtyFlags.put(key, true);
+      keyMap.computeIfPresent(value, (k, objects) -> {
         objects.remove(nodeRef);
-        if (objects.isEmpty()) {
-          keyMap.remove(value);
-        }
-      }
+        return objects.isEmpty() ? null : objects;
+      });
     }
   }
 
