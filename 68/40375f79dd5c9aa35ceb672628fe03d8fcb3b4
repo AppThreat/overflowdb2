@@ -1,0 +1,21 @@
+.github/workflows/pr.yml
+  s_c0804e5357f0c5::t_2675eb1b33e06a 23
+.github/workflows/release.yml
+  s_c0804e5357f0c5::t_c2413ff9b92ddd 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6840375f79dd5c9aa35ceb672628fe03d8fcb3b4",
+  "prompts": {},
+  "sessions": {
+    "s_c0804e5357f0c5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "75227701-fd30-4fc7-8eae-71a8df8f3a1c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Prabhu Subramanian <prabhu@appthreat.com>"
+    }
+  }
+}
